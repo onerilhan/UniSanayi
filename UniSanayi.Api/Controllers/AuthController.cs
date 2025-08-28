@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
+using UniSanayi.Api.DTOs.Auth;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -311,45 +312,5 @@ namespace UniSanayi.Api.Controllers
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
         }
-    }
-
-    // DTO Classes
-    public class StudentRegisterRequest
-    {
-        public string Email { get; set; } = default!;
-        public string Password { get; set; } = default!;
-        public string FirstName { get; set; } = default!;
-        public string LastName { get; set; } = default!;
-        public string UniversityName { get; set; } = default!;
-        public string Department { get; set; } = default!;
-        public int? CurrentYear { get; set; }
-        public int? GraduationYear { get; set; }
-    }
-
-    public class CompanyRegisterRequest
-    {
-        public string Email { get; set; } = default!;
-        public string Password { get; set; } = default!;
-        public string CompanyName { get; set; } = default!;
-        public string? Industry { get; set; }
-        public string? CompanySize { get; set; }
-        public string? Website { get; set; }
-        public string? Description { get; set; }
-        public string ContactPerson { get; set; } = default!;
-        public string? ContactPhone { get; set; }
-        public string? ContactEmail { get; set; }
-        public string? LocationCity { get; set; }
-    }
-
-    public class LoginRequest
-    {
-        public string Email { get; set; } = default!;
-        public string Password { get; set; } = default!;
-    }
-
-    public class ChangePasswordRequest
-    {
-        public string CurrentPassword { get; set; } = default!;
-        public string NewPassword { get; set; } = default!;
     }
 }
