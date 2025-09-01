@@ -5,6 +5,7 @@ using System.Text;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Api.Middleware;
 using Serilog;
+using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,8 @@ builder.Host.UseSerilog();
 
 // Add services to the container
 builder.Services.AddControllers();
+// FluentValidation
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddEndpointsApiExplorer();
 
 

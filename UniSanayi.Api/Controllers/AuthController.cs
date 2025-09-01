@@ -9,6 +9,8 @@ using System.Text.RegularExpressions;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Auth;
+using UniSanayi.Api.Models;
+using UniSanayi.Api.Validators.Auth;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -29,6 +31,15 @@ namespace UniSanayi.Api.Controllers
         [HttpPost("register/student")]
         public async Task<ActionResult> RegisterStudent(StudentRegisterRequest request)
         {
+
+            // Validation
+            var validator = new StudentRegisterRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+            return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+        }
             // Email kontrolü
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (existingUser != null)
@@ -75,9 +86,8 @@ namespace UniSanayi.Api.Controllers
             // Token oluştur
             var token = GenerateJwtToken(user);
 
-            return Ok(new
+        var responseData = new
             {
-                message = "Öğrenci kaydı başarılı",
                 token = token,
                 user = new
                 {
@@ -93,13 +103,24 @@ namespace UniSanayi.Api.Controllers
                     university = student.UniversityName,
                     department = student.Department
                 }
-            });
-        }
+            };
+
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Öğrenci kaydı başarılı."));
+                    }
 
         // POST: api/auth/register/company
         [HttpPost("register/company")]
         public async Task<ActionResult> RegisterCompany(CompanyRegisterRequest request)
         {
+
+            // Validation
+            var validator = new CompanyRegisterRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+            }
             // Email kontrolü
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (existingUser != null)
@@ -173,6 +194,13 @@ namespace UniSanayi.Api.Controllers
         [HttpPost("login")]
         public async Task<ActionResult> Login(LoginRequest request)
         {
+            var validator = new LoginRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+            }
             // User bul
             var user = await _context.Users
                 .Include(u => u.Student)

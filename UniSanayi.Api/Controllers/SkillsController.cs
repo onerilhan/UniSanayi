@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Skills;
+using UniSanayi.Api.Models;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -42,7 +43,7 @@ namespace UniSanayi.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(skills);
+            return Ok(ApiResponse<List<SkillResponse>>.SuccessResponse(skills, "Yetkinlikler başarıyla getirildi."));
         }
 
         // GET: api/skills/categories (Public - tüm kategoriler)
@@ -57,7 +58,7 @@ namespace UniSanayi.Api.Controllers
                 .OrderBy(c => c)
                 .ToListAsync();
 
-            return Ok(categories);
+            return Ok(ApiResponse<List<string>>.SuccessResponse(categories, "Kategoriler başarıyla getirildi."));
         }
 
         // GET: api/skills/{id} (Public - skill detayı)
@@ -81,7 +82,7 @@ namespace UniSanayi.Api.Controllers
                 CreatedAt = skill.CreatedAt
             };
 
-            return Ok(response);
+            return Ok(ApiResponse<SkillDetailResponse>.SuccessResponse(response, "Yetkinlik detayı başarıyla getirildi."));
         }
 
         // POST: api/skills/seed (Development - test data)
@@ -195,11 +196,11 @@ namespace UniSanayi.Api.Controllers
             _context.Skills.AddRange(skills);
             await _context.SaveChangesAsync();
 
-            return Ok(new { 
-                message = "Skills successfully seeded!", 
-                count = skills.Count,
-                categories = skills.Select(s => s.Category).Distinct().ToList()
-            });
+            var responseData = new { 
+            count = skills.Count,
+            categories = skills.Select(s => s.Category).Distinct().ToList()
+            };
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Yetkinlikler başarıyla oluşturuldu!"));
         }
     }
 }
