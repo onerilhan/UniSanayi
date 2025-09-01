@@ -31,20 +31,20 @@ namespace UniSanayi.Api.Controllers
         [HttpPost("register/student")]
         public async Task<ActionResult> RegisterStudent(StudentRegisterRequest request)
         {
-
             // Validation
             var validator = new StudentRegisterRequestValidator();
             var validationResult = await validator.ValidateAsync(request);
             if (!validationResult.IsValid)
             {
-            var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
-            return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
-        }
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+            }
+
             // Email kontrolü
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (existingUser != null)
             {
-                return BadRequest(new { message = "Bu email adresi zaten kullanımda." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu email adresi zaten kullanımda.", 400));
             }
 
             // Password hash
@@ -86,7 +86,7 @@ namespace UniSanayi.Api.Controllers
             // Token oluştur
             var token = GenerateJwtToken(user);
 
-        var responseData = new
+            var responseData = new
             {
                 token = token,
                 user = new
@@ -106,13 +106,12 @@ namespace UniSanayi.Api.Controllers
             };
 
             return Ok(ApiResponse<object>.SuccessResponse(responseData, "Öğrenci kaydı başarılı."));
-                    }
+        }
 
         // POST: api/auth/register/company
         [HttpPost("register/company")]
         public async Task<ActionResult> RegisterCompany(CompanyRegisterRequest request)
         {
-
             // Validation
             var validator = new CompanyRegisterRequestValidator();
             var validationResult = await validator.ValidateAsync(request);
@@ -121,11 +120,12 @@ namespace UniSanayi.Api.Controllers
                 var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
                 return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
             }
+
             // Email kontrolü
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
             if (existingUser != null)
             {
-                return BadRequest(new { message = "Bu email adresi zaten kullanımda." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu email adresi zaten kullanımda.", 400));
             }
 
             // Password hash
@@ -170,9 +170,8 @@ namespace UniSanayi.Api.Controllers
             // Token oluştur
             var token = GenerateJwtToken(user);
 
-            return Ok(new
+            var responseData = new
             {
-                message = "Şirket kaydı başarılı",
                 token = token,
                 user = new
                 {
@@ -187,7 +186,9 @@ namespace UniSanayi.Api.Controllers
                     industry = company.Industry,
                     isVerified = company.IsVerified
                 }
-            });
+            };
+
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Şirket kaydı başarılı."));
         }
 
         // POST: api/auth/login
@@ -201,6 +202,7 @@ namespace UniSanayi.Api.Controllers
                 var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
                 return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
             }
+
             // User bul
             var user = await _context.Users
                 .Include(u => u.Student)
@@ -209,19 +211,19 @@ namespace UniSanayi.Api.Controllers
 
             if (user == null)
             {
-                return BadRequest(new { message = "Email veya şifre hatalı." });
+                return BadRequest(ApiResponse.ErrorResponse("Email veya şifre hatalı.", 400));
             }
 
             // Şifre kontrolü
             if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             {
-                return BadRequest(new { message = "Email veya şifre hatalı." });
+                return BadRequest(ApiResponse.ErrorResponse("Email veya şifre hatalı.", 400));
             }
 
             // Account aktif mi?
             if (!user.IsActive)
             {
-                return BadRequest(new { message = "Hesabınız devre dışı bırakıldı." });
+                return BadRequest(ApiResponse.ErrorResponse("Hesabınız devre dışı bırakıldı.", 400));
             }
 
             // Token oluştur
@@ -230,7 +232,6 @@ namespace UniSanayi.Api.Controllers
             // Response hazırla
             var response = new
             {
-                message = "Giriş başarılı",
                 token = token,
                 user = new
                 {
@@ -245,11 +246,10 @@ namespace UniSanayi.Api.Controllers
             // User type'a göre profil bilgisi ekle
             if (user.UserType == "Student" && user.Student != null)
             {
-                return Ok(new
+                var responseData = new
                 {
-                    response.message,
-                    response.token,
-                    response.user,
+                    token = response.token,
+                    user = response.user,
                     student = new
                     {
                         id = user.Student.Id,
@@ -259,15 +259,16 @@ namespace UniSanayi.Api.Controllers
                         department = user.Student.Department,
                         isAvailable = user.Student.IsAvailable
                     }
-                });
+                };
+
+                return Ok(ApiResponse<object>.SuccessResponse(responseData, "Giriş başarılı."));
             }
             else if (user.UserType == "Company" && user.Company != null)
             {
-                return Ok(new
+                var responseData = new
                 {
-                    response.message,
-                    response.token,
-                    response.user,
+                    token = response.token,
+                    user = response.user,
                     company = new
                     {
                         id = user.Company.Id,
@@ -275,21 +276,33 @@ namespace UniSanayi.Api.Controllers
                         industry = user.Company.Industry,
                         isVerified = user.Company.IsVerified
                     }
-                });
+                };
+
+                return Ok(ApiResponse<object>.SuccessResponse(responseData, "Giriş başarılı."));
             }
 
-            return Ok(response);
+            return Ok(ApiResponse<object>.SuccessResponse(response, "Giriş başarılı."));
         }
 
         // POST: api/auth/change-password
         [HttpPost("change-password")]
+        [Authorize]
         public async Task<ActionResult> ChangePassword(ChangePasswordRequest request)
         {
+            // Validation
+            var validator = new ChangePasswordRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+            }
+
             // JWT token'dan user ID al (Authorization header'dan)
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (userIdClaim == null)
             {
-                return Unauthorized(new { message = "Geçersiz token." });
+                return Unauthorized(ApiResponse.ErrorResponse("Geçersiz token.", 401));
             }
 
             var userId = Guid.Parse(userIdClaim.Value);
@@ -297,13 +310,13 @@ namespace UniSanayi.Api.Controllers
 
             if (user == null)
             {
-                return NotFound(new { message = "Kullanıcı bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Kullanıcı bulunamadı.", 404));
             }
 
             // Mevcut şifre kontrolü
             if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
             {
-                return BadRequest(new { message = "Mevcut şifre hatalı." });
+                return BadRequest(ApiResponse.ErrorResponse("Mevcut şifre hatalı.", 400));
             }
 
             // Yeni şifreyi hash'le ve güncelle
@@ -312,7 +325,7 @@ namespace UniSanayi.Api.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Şifre başarıyla güncellendi." });
+            return Ok(ApiResponse.SuccessResponse("Şifre başarıyla güncellendi."));
         }
 
         // Private: JWT Token oluştur

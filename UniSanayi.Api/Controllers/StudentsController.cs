@@ -5,6 +5,8 @@ using System.Security.Claims;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Students;
+using UniSanayi.Api.Models;
+using UniSanayi.Api.Validators.Students;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -29,7 +31,7 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
             var response = new StudentProfileResponse
             {
@@ -51,20 +53,42 @@ namespace UniSanayi.Api.Controllers
                 CreatedAt = student.CreatedAt
             };
 
-            return Ok(response);
+            return Ok(ApiResponse<StudentProfileResponse>.SuccessResponse(response, "Profil bilgileri getirildi."));
         }
 
         // PUT: api/students/profile
         [HttpPut("profile")]
         public async Task<ActionResult> UpdateProfile(UpdateStudentProfileRequest request)
         {
+            // Validation
+            var validator = new UpdateStudentProfileRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Profil güncelleme parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var student = await _context.Students
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
+            // Öğrenci numarası değiştiriliyorsa, başka birinde kayıtlı mı kontrol et
+            if (!string.IsNullOrEmpty(request.StudentNumber) && request.StudentNumber != student.StudentNumber)
+            {
+                var existingStudent = await _context.Students
+                    .FirstOrDefaultAsync(s => s.StudentNumber == request.StudentNumber && s.Id != student.Id);
+                
+                if (existingStudent != null)
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("Bu öğrenci numarası zaten kullanımda.", 400));
+                }
+            }
+
+            // Güncelleme
             if (request.FirstName != null) student.FirstName = request.FirstName;
             if (request.LastName != null) student.LastName = request.LastName;
             if (request.StudentNumber != null) student.StudentNumber = request.StudentNumber;
@@ -82,7 +106,7 @@ namespace UniSanayi.Api.Controllers
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Profil başarıyla güncellendi." });
+            return Ok(ApiResponse.SuccessResponse("Profil başarıyla güncellendi."));
         }
 
         // GET: api/students/skills
@@ -94,7 +118,7 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
             var skills = await _context.StudentSkills
                 .Include(ss => ss.Skill)
@@ -110,33 +134,53 @@ namespace UniSanayi.Api.Controllers
                     IsVerified = ss.IsVerified,
                     AddedDate = ss.AddedDate
                 })
+                .OrderBy(ss => ss.SkillCategory)
+                .ThenBy(ss => ss.SkillName)
                 .ToListAsync();
 
-            return Ok(skills);
+            return Ok(ApiResponse<List<StudentSkillResponse>>.SuccessResponse(skills, "Yetkinlikler başarıyla getirildi."));
         }
 
         // POST: api/students/skills
         [HttpPost("skills")]
         public async Task<ActionResult> AddSkill(AddStudentSkillRequest request)
         {
+            // Validation
+            var validator = new AddStudentSkillRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Yetkinlik ekleme parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var student = await _context.Students
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
-            // Skill var mı kontrol et
+            // Skill var mı ve aktif mi kontrol et
             var skill = await _context.Skills.FindAsync(request.SkillId);
-            if (skill == null)
-                return BadRequest(new { message = "Geçersiz skill ID." });
+            if (skill == null || !skill.IsActive)
+                return BadRequest(ApiResponse.ErrorResponse("Geçersiz veya pasif skill.", 400));
 
             // Zaten ekli mi kontrol et
             var existing = await _context.StudentSkills
                 .FirstOrDefaultAsync(ss => ss.StudentId == student.Id && ss.SkillId == request.SkillId);
 
             if (existing != null)
-                return BadRequest(new { message = "Bu skill zaten ekli." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu skill zaten profilinizde mevcut.", 400));
+
+            // Maksimum skill sayısı kontrolü (iş kuralı)
+            var currentSkillCount = await _context.StudentSkills
+                .CountAsync(ss => ss.StudentId == student.Id);
+
+            if (currentSkillCount >= 50) // Maksimum 50 skill
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Maksimum 50 yetkinlik ekleyebilirsiniz.", 400));
+            }
 
             var studentSkill = new StudentSkill
             {
@@ -144,7 +188,7 @@ namespace UniSanayi.Api.Controllers
                 StudentId = student.Id,
                 SkillId = request.SkillId,
                 ProficiencyLevel = request.ProficiencyLevel,
-                YearsOfExperience = request.YearsOfExperience,
+                YearsOfExperience = request.YearsOfExperience ?? 0,
                 IsVerified = false,
                 AddedDate = DateTimeOffset.UtcNow
             };
@@ -152,7 +196,50 @@ namespace UniSanayi.Api.Controllers
             _context.StudentSkills.Add(studentSkill);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Skill başarıyla eklendi." });
+            var responseData = new { skillId = skill.Id, skillName = skill.Name };
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Yetkinlik başarıyla eklendi."));
+        }
+
+        // PUT: api/students/skills/{skillId}
+        [HttpPut("skills/{skillId}")]
+        public async Task<ActionResult> UpdateSkill(int skillId, AddStudentSkillRequest request)
+        {
+            // Validation (aynı validator kullanılabilir)
+            var validator = new AddStudentSkillRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Yetkinlik güncelleme parametreleri geçersiz.", 400, errors));
+            }
+
+            // Request'teki skillId ile URL'deki skillId uyumlu olmalı
+            if (request.SkillId != skillId)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Skill ID uyumsuzluğu.", 400));
+            }
+
+            var userId = GetCurrentUserId();
+            var student = await _context.Students
+                .FirstOrDefaultAsync(s => s.UserId == userId);
+
+            if (student == null)
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
+
+            var studentSkill = await _context.StudentSkills
+                .Include(ss => ss.Skill)
+                .FirstOrDefaultAsync(ss => ss.StudentId == student.Id && ss.SkillId == skillId);
+
+            if (studentSkill == null)
+                return NotFound(ApiResponse.ErrorResponse("Bu yetkinlik profilinizde bulunmuyor.", 404));
+
+            // Güncelleme
+            studentSkill.ProficiencyLevel = request.ProficiencyLevel;
+            studentSkill.YearsOfExperience = request.YearsOfExperience ?? 0;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(ApiResponse.SuccessResponse("Yetkinlik başarıyla güncellendi."));
         }
 
         // DELETE: api/students/skills/{skillId}
@@ -164,18 +251,18 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
             var studentSkill = await _context.StudentSkills
                 .FirstOrDefaultAsync(ss => ss.StudentId == student.Id && ss.SkillId == skillId);
 
             if (studentSkill == null)
-                return NotFound(new { message = "Skill bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Bu yetkinlik profilinizde bulunmuyor.", 404));
 
             _context.StudentSkills.Remove(studentSkill);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Skill başarıyla silindi." });
+            return Ok(ApiResponse.SuccessResponse("Yetkinlik başarıyla silindi."));
         }
 
         private Guid GetCurrentUserId()

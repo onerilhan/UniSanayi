@@ -5,6 +5,8 @@ using System.Security.Claims;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Projects;
+using UniSanayi.Api.Models;
+using UniSanayi.Api.Validators.Projects;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -24,6 +26,15 @@ namespace UniSanayi.Api.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<List<ProjectListResponse>>> GetActiveProjects([FromQuery] ProjectFilterRequest request)
         {
+            // Validation
+            var validator = new ProjectFilterRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Filtreleme parametreleri geçersiz.", 400, errors));
+            }
+
             var query = _context.Projects
                 .Include(p => p.Company)
                 .Where(p => p.Status == "Active");
@@ -69,7 +80,8 @@ namespace UniSanayi.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(new { projects, totalCount, page = request.Page, pageSize = request.PageSize });
+            var responseData = new { projects, totalCount, page = request.Page, pageSize = request.PageSize };
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Projeler başarıyla listelendi."));
         }
 
         // GET: api/projects/{id} (Public - proje detayı)
@@ -82,7 +94,7 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı.", 404));
 
             // View count artır
             project.ViewCount++;
@@ -129,7 +141,7 @@ namespace UniSanayi.Api.Controllers
                 UpdatedAt = project.UpdatedAt
             };
 
-            return Ok(response);
+            return Ok(ApiResponse<ProjectDetailResponse>.SuccessResponse(response, "Proje detayı başarıyla getirildi."));
         }
 
         // GET: api/projects/my (Company - kendi projeleri)
@@ -142,7 +154,7 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var projects = await _context.Projects
                 .Where(p => p.CompanyId == company.Id)
@@ -163,7 +175,7 @@ namespace UniSanayi.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(projects);
+            return Ok(ApiResponse<List<MyProjectResponse>>.SuccessResponse(projects, "Projeleriniz başarıyla listelendi."));
         }
 
         // POST: api/projects (Company - yeni proje)
@@ -171,12 +183,21 @@ namespace UniSanayi.Api.Controllers
         [Authorize(Roles = "Company")]
         public async Task<ActionResult> CreateProject(CreateProjectRequest request)
         {
+            // Validation
+            var validator = new CreateProjectRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Proje oluşturma parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var company = await _context.Companies
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var project = new Project
             {
@@ -202,10 +223,9 @@ namespace UniSanayi.Api.Controllers
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
-            return Created($"/api/projects/{project.Id}", new { 
-                message = "Proje başarıyla oluşturuldu.",
-                projectId = project.Id 
-            });
+            var responseData = new { projectId = project.Id };
+            return Created($"/api/projects/{project.Id}", 
+                ApiResponse<object>.SuccessResponse(responseData, "Proje başarıyla oluşturuldu."));
         }
 
         // PUT: api/projects/{id} (Company - proje güncelle)
@@ -213,18 +233,40 @@ namespace UniSanayi.Api.Controllers
         [Authorize(Roles = "Company")]
         public async Task<ActionResult> UpdateProject(Guid id, UpdateProjectRequest request)
         {
+            // Validation
+            var validator = new UpdateProjectRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Proje güncelleme parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var company = await _context.Companies
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == company.Id);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı veya yetkiniz yok." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı veya yetkiniz yok.", 404));
+
+            // Business Logic: Active durumundaki projelerde kritik alanlar değiştirilemez
+            if (project.Status == "Active")
+            {
+                if (request.ProjectType != null && request.ProjectType != project.ProjectType)
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("Aktif projelerde proje türü değiştirilemez.", 400));
+                }
+                if (request.DurationDays.HasValue && request.DurationDays != project.DurationDays)
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("Aktif projelerde proje süresi değiştirilemez.", 400));
+                }
+            }
 
             // Güncelleme
             if (request.Title != null) project.Title = request.Title;
@@ -243,7 +285,7 @@ namespace UniSanayi.Api.Controllers
             project.UpdatedAt = DateTimeOffset.UtcNow;
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Proje başarıyla güncellendi." });
+            return Ok(ApiResponse.SuccessResponse("Proje başarıyla güncellendi."));
         }
 
         // POST: api/projects/{id}/skills (Company - skill requirement ekle)
@@ -251,30 +293,39 @@ namespace UniSanayi.Api.Controllers
         [Authorize(Roles = "Company")]
         public async Task<ActionResult> AddSkillRequirement(Guid id, AddSkillRequirementRequest request)
         {
+            // Validation
+            var validator = new AddSkillRequirementRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Skill gereksinimi parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var company = await _context.Companies
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == company.Id);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı veya yetkiniz yok." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı veya yetkiniz yok.", 404));
 
             // Skill var mı kontrol et
             var skill = await _context.Skills.FindAsync(request.SkillId);
-            if (skill == null)
-                return BadRequest(new { message = "Geçersiz skill ID." });
+            if (skill == null || !skill.IsActive)
+                return BadRequest(ApiResponse.ErrorResponse("Geçersiz veya pasif skill.", 400));
 
             // Zaten ekli mi kontrol et
             var existing = await _context.ProjectSkillRequirements
                 .FirstOrDefaultAsync(psr => psr.ProjectId == id && psr.SkillId == request.SkillId);
 
             if (existing != null)
-                return BadRequest(new { message = "Bu skill requirement zaten ekli." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu skill gereksinimi zaten ekli.", 400));
 
             var skillRequirement = new ProjectSkillRequirement
             {
@@ -290,7 +341,7 @@ namespace UniSanayi.Api.Controllers
             project.UpdatedAt = DateTimeOffset.UtcNow;
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Skill requirement başarıyla eklendi." });
+            return Ok(ApiResponse.SuccessResponse("Skill gereksinimi başarıyla eklendi."));
         }
 
         // DELETE: api/projects/{id}/skills/{skillId} (Company - skill requirement sil)
@@ -303,25 +354,25 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == company.Id);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı veya yetkiniz yok." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı veya yetkiniz yok.", 404));
 
             var skillRequirement = await _context.ProjectSkillRequirements
                 .FirstOrDefaultAsync(psr => psr.ProjectId == id && psr.SkillId == skillId);
 
             if (skillRequirement == null)
-                return NotFound(new { message = "Skill requirement bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Skill gereksinimi bulunamadı.", 404));
 
             _context.ProjectSkillRequirements.Remove(skillRequirement);
             project.UpdatedAt = DateTimeOffset.UtcNow;
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Skill requirement başarıyla silindi." });
+            return Ok(ApiResponse.SuccessResponse("Skill gereksinimi başarıyla silindi."));
         }
 
         private Guid GetCurrentUserId()

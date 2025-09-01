@@ -5,6 +5,8 @@ using System.Security.Claims;
 using UniSanayi.Infrastructure.Persistence;
 using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Applications;
+using UniSanayi.Api.Models;
+using UniSanayi.Api.Validators.Applications;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -25,12 +27,21 @@ namespace UniSanayi.Api.Controllers
         [Authorize(Roles = "Student")]
         public async Task<ActionResult> ApplyToProject(CreateApplicationRequest request)
         {
+            // Validation
+            var validator = new CreateApplicationRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Başvuru parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var student = await _context.Students
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
             // Proje var mı ve aktif mi kontrol et
             var project = await _context.Projects
@@ -38,21 +49,21 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(p => p.Id == request.ProjectId);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı.", 404));
 
             if (project.Status != "Active")
-                return BadRequest(new { message = "Bu proje aktif değil." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu proje aktif değil.", 400));
 
             // Application deadline kontrolü
             if (project.ApplicationDeadline.HasValue && project.ApplicationDeadline < DateTimeOffset.UtcNow)
-                return BadRequest(new { message = "Başvuru süresi dolmuş." });
+                return BadRequest(ApiResponse.ErrorResponse("Başvuru süresi dolmuş.", 400));
 
             // Zaten başvuru yapmış mı kontrol et
             var existingApplication = await _context.Applications
                 .FirstOrDefaultAsync(a => a.ProjectId == request.ProjectId && a.StudentId == student.Id);
 
             if (existingApplication != null)
-                return BadRequest(new { message = "Bu projeye zaten başvuru yaptınız." });
+                return BadRequest(ApiResponse.ErrorResponse("Bu projeye zaten başvuru yaptınız.", 400));
 
             // Max başvuru sayısı kontrolü
             if (project.MaxApplicants.HasValue)
@@ -61,7 +72,33 @@ namespace UniSanayi.Api.Controllers
                     .CountAsync(a => a.ProjectId == request.ProjectId);
 
                 if (currentApplicationCount >= project.MaxApplicants)
-                    return BadRequest(new { message = "Bu proje için başvuru kotası dolmuş." });
+                    return BadRequest(ApiResponse.ErrorResponse("Bu proje için başvuru kotası dolmuş.", 400));
+            }
+
+            // Student profili tamamlanmış mı kontrolü (iş kuralı)
+            if (string.IsNullOrEmpty(student.Phone) || string.IsNullOrEmpty(student.LocationCity) || 
+                !student.GraduationYear.HasValue)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Başvuru yapabilmek için profilinizi tamamlayınız (telefon, şehir, mezuniyet yılı).", 400));
+            }
+
+            // Student müsait mi kontrolü
+            if (!student.IsAvailable)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Profiliniz şu anda müsait değil olarak işaretli. Başvuru yapmak için profilinizi müsait olarak güncelleyiniz.", 400));
+            }
+
+            // Aynı şirkete aynı anda kaç başvuru yapıyor kontrolü (spam önlemi)
+            var recentApplicationsToSameCompany = await _context.Applications
+                .Include(a => a.Project)
+                .Where(a => a.StudentId == student.Id && 
+                           a.Project!.CompanyId == project.CompanyId &&
+                           a.AppliedAt >= DateTimeOffset.UtcNow.AddDays(-7))
+                .CountAsync();
+
+            if (recentApplicationsToSameCompany >= 3)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Son 7 gün içinde bu şirkete 3'ten fazla başvuru yapamazsınız.", 400));
             }
 
             var application = new Application
@@ -77,10 +114,14 @@ namespace UniSanayi.Api.Controllers
             _context.Applications.Add(application);
             await _context.SaveChangesAsync();
 
-            return Created($"/api/applications/{application.Id}", new { 
-                message = "Başvuru başarıyla gönderildi.",
-                applicationId = application.Id
-            });
+            var responseData = new { 
+                applicationId = application.Id,
+                projectTitle = project.Title,
+                companyName = project.Company!.CompanyName
+            };
+
+            return Created($"/api/applications/{application.Id}", 
+                ApiResponse<object>.SuccessResponse(responseData, "Başvuru başarıyla gönderildi."));
         }
 
         // GET: api/applications/my (Student - kendi başvuruları)
@@ -93,7 +134,7 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
             if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
             var applications = await _context.Applications
                 .Include(a => a.Project)
@@ -113,7 +154,7 @@ namespace UniSanayi.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(applications);
+            return Ok(ApiResponse<List<MyApplicationResponse>>.SuccessResponse(applications, "Başvurularınız başarıyla listelendi."));
         }
 
         // GET: api/applications/project/{projectId} (Company - proje başvurularını görüntüle)
@@ -126,14 +167,14 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             // Proje bu şirkete ait mi kontrol et
             var project = await _context.Projects
                 .FirstOrDefaultAsync(p => p.Id == projectId && p.CompanyId == company.Id);
 
             if (project == null)
-                return NotFound(new { message = "Proje bulunamadı veya yetkiniz yok." });
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı veya yetkiniz yok.", 404));
 
             var applications = await _context.Applications
                 .Include(a => a.Student)
@@ -158,7 +199,7 @@ namespace UniSanayi.Api.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(applications);
+            return Ok(ApiResponse<List<ProjectApplicationResponse>>.SuccessResponse(applications, "Proje başvuruları başarıyla listelendi."));
         }
 
         // PUT: api/applications/{id}/status (Company - başvuru durumunu güncelle)
@@ -166,35 +207,117 @@ namespace UniSanayi.Api.Controllers
         [Authorize(Roles = "Company")]
         public async Task<ActionResult> UpdateApplicationStatus(Guid id, UpdateApplicationStatusRequest request)
         {
+            // Validation
+            var validator = new UpdateApplicationStatusRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Durum güncelleme parametreleri geçersiz.", 400, errors));
+            }
+
             var userId = GetCurrentUserId();
             var company = await _context.Companies
                 .FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (company == null)
-                return NotFound(new { message = "Company profili bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
 
             var application = await _context.Applications
                 .Include(a => a.Project)
+                .Include(a => a.Student)
                 .FirstOrDefaultAsync(a => a.Id == id);
 
             if (application == null)
-                return NotFound(new { message = "Başvuru bulunamadı." });
+                return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
 
             // Başvuru bu şirketin projesine mi kontrol et
             if (application.Project!.CompanyId != company.Id)
-                return NotFound(new { message = "Bu başvuruyu görüntüleme yetkiniz yok." });
+                return StatusCode(403, ApiResponse<object>.ErrorResponse("Bu başvuruyu görüntüleme yetkiniz yok.", 403));
 
-            // Geçerli status değerleri kontrolü
-            var validStatuses = new[] { "Pending", "Reviewed", "Accepted", "Rejected" };
-            if (!validStatuses.Contains(request.Status))
-                return BadRequest(new { message = "Geçersiz başvuru durumu." });
+            // Business Logic: State transition kontrolü
+            var currentStatus = application.ApplicationStatus;
+            var newStatus = request.Status;
+
+            // Geçersiz state transition'lar
+            if (currentStatus == "Accepted" || currentStatus == "Rejected")
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Kabul edilmiş veya reddedilmiş başvuruların durumu değiştirilemez.", 400));
+            }
+
+            // Pending'den direkt Accepted'e geçiş kontrolü (iş kuralı)
+            if (currentStatus == "Pending" && newStatus == "Accepted")
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Başvuruyu kabul etmeden önce 'Reviewed' durumuna almalısınız.", 400));
+            }
+
+            // Aynı proje için aynı anda birden fazla Accepted başvuru kontrolü
+            if (newStatus == "Accepted")
+            {
+                var existingAcceptedCount = await _context.Applications
+                    .CountAsync(a => a.ProjectId == application.ProjectId && 
+                                     a.ApplicationStatus == "Accepted" && 
+                                     a.Id != id);
+
+                var maxAccepted = application.Project.MaxApplicants ?? 1; // Default 1 kişi kabul
+                
+                if (existingAcceptedCount >= maxAccepted)
+                {
+                    return BadRequest(ApiResponse.ErrorResponse($"Bu proje için maksimum {maxAccepted} başvuru kabul edilebilir.", 400));
+                }
+            }
 
             application.ApplicationStatus = request.Status;
             application.ReviewedAt = DateTimeOffset.UtcNow;
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Başvuru durumu başarıyla güncellendi." });
+            var responseData = new { 
+                applicationId = application.Id,
+                studentName = $"{application.Student!.FirstName} {application.Student.LastName}",
+                newStatus = request.Status
+            };
+
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru durumu başarıyla güncellendi."));
+        }
+
+        // DELETE: api/applications/{id} (Student - başvuruyu iptal et)
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Student")]
+        public async Task<ActionResult> CancelApplication(Guid id)
+        {
+            var userId = GetCurrentUserId();
+            var student = await _context.Students
+                .FirstOrDefaultAsync(s => s.UserId == userId);
+
+            if (student == null)
+                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
+
+            var application = await _context.Applications
+                .Include(a => a.Project)
+                .FirstOrDefaultAsync(a => a.Id == id && a.StudentId == student.Id);
+
+            if (application == null)
+                return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
+
+            // Sadece Pending durumundaki başvurular iptal edilebilir
+            if (application.ApplicationStatus != "Pending")
+                return BadRequest(ApiResponse.ErrorResponse("Bu başvuru artık iptal edilemez.", 400));
+
+            // Başvuru tarihi 24 saat geçmişse iptal edilemez (iş kuralı)
+            if (application.AppliedAt < DateTimeOffset.UtcNow.AddHours(-24))
+            {
+                return BadRequest(ApiResponse.ErrorResponse("24 saat geçen başvurular iptal edilemez.", 400));
+            }
+
+            _context.Applications.Remove(application);
+            await _context.SaveChangesAsync();
+
+            var responseData = new { 
+                projectTitle = application.Project!.Title 
+            };
+
+            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru başarıyla iptal edildi."));
         }
 
         // GET: api/applications/{id} (Both - başvuru detayı)
@@ -212,24 +335,24 @@ namespace UniSanayi.Api.Controllers
                 .FirstOrDefaultAsync(a => a.Id == id);
 
             if (application == null)
-                return NotFound(new { message = "Başvuru bulunamadı." });
+                return NotFound(ApiResponse<ApplicationDetailResponse>.ErrorResponse("Başvuru bulunamadı.", 404));
 
             // Yetki kontrolü
             if (userRole == "Student")
             {
                 var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
                 if (student == null || application.StudentId != student.Id)
-                    return NotFound(new { message = "Bu başvuruyu görüntüleme yetkiniz yok." });
+                    return StatusCode(403, ApiResponse<ApplicationDetailResponse>.ErrorResponse("Bu başvuruyu görüntüleme yetkiniz yok.", 403));
             }
             else if (userRole == "Company")
             {
                 var company = await _context.Companies.FirstOrDefaultAsync(c => c.UserId == userId);
                 if (company == null || application.Project!.CompanyId != company.Id)
-                    return NotFound(new { message = "Bu başvuruyu görüntüleme yetkiniz yok." });
+                    return StatusCode(403, ApiResponse<ApplicationDetailResponse>.ErrorResponse("Bu başvuruyu görüntüleme yetkiniz yok.", 403));
             }
             else
             {
-                return Forbid();
+                return StatusCode(403, ApiResponse<ApplicationDetailResponse>.ErrorResponse("Yetkiniz bulunmuyor.", 403));
             }
 
             var response = new ApplicationDetailResponse
@@ -253,35 +376,7 @@ namespace UniSanayi.Api.Controllers
                 ReviewedAt = application.ReviewedAt
             };
 
-            return Ok(response);
-        }
-
-        // DELETE: api/applications/{id} (Student - başvuruyu iptal et)
-        [HttpDelete("{id}")]
-        [Authorize(Roles = "Student")]
-        public async Task<ActionResult> CancelApplication(Guid id)
-        {
-            var userId = GetCurrentUserId();
-            var student = await _context.Students
-                .FirstOrDefaultAsync(s => s.UserId == userId);
-
-            if (student == null)
-                return NotFound(new { message = "Student profili bulunamadı." });
-
-            var application = await _context.Applications
-                .FirstOrDefaultAsync(a => a.Id == id && a.StudentId == student.Id);
-
-            if (application == null)
-                return NotFound(new { message = "Başvuru bulunamadı." });
-
-            // Sadece Pending durumundaki başvurular iptal edilebilir
-            if (application.ApplicationStatus != "Pending")
-                return BadRequest(new { message = "Bu başvuru artık iptal edilemez." });
-
-            _context.Applications.Remove(application);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Başvuru başarıyla iptal edildi." });
+            return Ok(ApiResponse<ApplicationDetailResponse>.SuccessResponse(response, "Başvuru detayı başarıyla getirildi."));
         }
 
         private Guid GetCurrentUserId()
