@@ -7,6 +7,7 @@ import Register from './pages/auth/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import StudentDashboard from './pages/student/StudentDashboard';
 import CompanyDashboard from './pages/company/CompanyDashboard';
+import ProjectDetail from './pages/ProjectDetail';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/project/:id" element={<ProjectDetail />} />
         
         {/* Protected Routes */}
         <Route path="/student" element={
