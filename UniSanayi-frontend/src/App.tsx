@@ -6,6 +6,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import StudentDashboard from './pages/student/StudentDashboard';
+import StudentProfileSettings from './pages/student/StudentProfileSettings';
 import CompanyDashboard from './pages/company/CompanyDashboard';
 import ProjectDetail from './pages/ProjectDetail';
 
@@ -22,6 +23,12 @@ export default function App() {
         <Route path="/student" element={
           <ProtectedRoute userType="Student">
             <StudentDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/student/profile" element={
+          <ProtectedRoute userType="Student">
+            <StudentProfileSettings />
           </ProtectedRoute>
         } />
         
