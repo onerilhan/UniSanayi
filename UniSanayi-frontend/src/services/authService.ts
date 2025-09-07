@@ -61,12 +61,12 @@ export const authService = {
     return data;
   },
 
-  async login(body: { email: string; password: string }) {
-    //  /api/Auth/login
-    const { data } = await apiClient.post('/auth/login', {
-      email: body.email,
-      password: body.password,
-    });
-    return data; 
-  },
+  async login(body: { email: string; password: string; captchaToken?: string }) {
+  const { data } = await apiClient.post('/auth/login', {
+    email: body.email,
+    password: body.password,
+    captchaToken: body.captchaToken
+  });
+  return data; 
+},
 };

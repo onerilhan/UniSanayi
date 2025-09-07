@@ -4,5 +4,6 @@ namespace UniSanayi.Api.DTOs.Auth
     {
         public string Email { get; set; } = default!;
         public string Password { get; set; } = default!;
+        public string? CaptchaToken { get; set; }
     }
 }

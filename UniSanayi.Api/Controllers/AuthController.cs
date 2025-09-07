@@ -11,6 +11,7 @@ using UniSanayi.Domain.Entities;
 using UniSanayi.Api.DTOs.Auth;
 using UniSanayi.Api.Models;
 using UniSanayi.Api.Validators.Auth;
+using System.Text.Json;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -202,6 +203,17 @@ namespace UniSanayi.Api.Controllers
                 var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
                 return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
             }
+            // reCAPTCHA doğrulama
+            if (string.IsNullOrEmpty(request.CaptchaToken))
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Güvenlik doğrulaması gereklidir.", 400));
+            }
+
+            var isValidCaptcha = await VerifyRecaptchaAsync(request.CaptchaToken);
+            if (!isValidCaptcha)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Güvenlik doğrulaması başarısız. Lütfen tekrar deneyin.", 400));
+            }
 
             // User bul
             var user = await _context.Users
@@ -353,5 +365,36 @@ namespace UniSanayi.Api.Controllers
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
         }
+
+        // Private: reCAPTCHA doğrulama
+private async Task<bool> VerifyRecaptchaAsync(string token)
+{
+    if (string.IsNullOrWhiteSpace(token))
+        return false;
+
+    var secretKey = "6LdkocErAAAAAFm2wzQ0jSU_9nE0mlY4kPhv1cLw"; // Secret Key
+    var url = "https://www.google.com/recaptcha/api/siteverify";
+    
+    using var httpClient = new HttpClient();
+    var parameters = new List<KeyValuePair<string, string>>
+    {
+        new("secret", secretKey),
+        new("response", token)
+    };
+    
+    var content = new FormUrlEncodedContent(parameters);
+    var response = await httpClient.PostAsync(url, content);
+    var jsonResponse = await response.Content.ReadAsStringAsync();
+    
+    try
+    {
+        using var jsonDoc = JsonDocument.Parse(jsonResponse);
+        return jsonDoc.RootElement.GetProperty("success").GetBoolean();
+    }
+    catch
+    {
+        return false;
+    }
+}
     }
 }

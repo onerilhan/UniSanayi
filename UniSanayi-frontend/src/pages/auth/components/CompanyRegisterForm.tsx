@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { 
+  TextField, 
+  Button, 
+  MenuItem, 
+  Box, 
+  Typography, 
+  Paper,
+  Stack,
+  Alert,
+  IconButton
+} from '@mui/material';
+import { ArrowBack } from '@mui/icons-material';
 import { useAuth } from '../../../contexts/AuthContext';
 import { authService } from '../../../services/authService';
 import { useRegisterValidation } from '../../../hooks/useRegisterValidation';
@@ -79,391 +91,260 @@ const CompanyRegisterForm: React.FC<CompanyRegisterFormProps> = ({ onBack, onSuc
   ];
 
   return (
-    <div style={{ 
-      maxWidth: '600px', 
-      width: '100%', 
-      padding: '40px', 
-      backgroundColor: 'white', 
-      borderRadius: '8px', 
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
-    }}>
+    <Paper 
+      elevation={8}
+      sx={{ 
+        maxWidth: 700, 
+        width: '100%', 
+        p: 5, 
+        borderRadius: 3,
+        background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'
+      }}
+    >
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <button 
+      <Box sx={{ mb: 4 }}>
+        <IconButton 
           onClick={onBack}
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: '#667eea', 
-            cursor: 'pointer', 
-            fontSize: '14px',
-            marginBottom: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px'
+          sx={{ 
+            mb: 2, 
+            color: '#667eea',
+            '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' }
           }}
         >
-          ← Geri Dön
-        </button>
-        <h2 style={{ color: '#1a202c', margin: 0 }}>Şirket Kaydı</h2>
-        <p style={{ color: '#718096', fontSize: '14px', margin: '5px 0 0 0' }}>
+          <ArrowBack />
+        </IconButton>
+        
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            fontWeight: 700, 
+            color: '#1f2937', 
+            mb: 1,
+            textAlign: 'center'
+          }}
+        >
+          🏢 Şirket Kaydı
+        </Typography>
+        
+        <Typography 
+          variant="body1" 
+          sx={{ 
+            color: '#6b7280', 
+            textAlign: 'center' 
+          }}
+        >
           Şirket bilgilerinizi girin ve hesabınızı oluşturun
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       {/* Success Message */}
       {successMessage && (
-        <div style={{ 
-          backgroundColor: '#d4edda', 
-          color: '#155724', 
-          padding: '12px', 
-          borderRadius: '6px', 
-          marginBottom: '20px', 
-          border: '1px solid #c3e6cb', 
-          textAlign: 'center' 
-        }}>
+        <Alert severity="success" sx={{ mb: 3 }}>
           {successMessage}
-        </div>
+        </Alert>
       )}
 
       {/* Error Message */}
       {errors.general && (
-        <div style={{ 
-          backgroundColor: '#f8d7da', 
-          color: '#721c24', 
-          padding: '12px', 
-          borderRadius: '6px', 
-          marginBottom: '20px', 
-          border: '1px solid #f5c6cb' 
-        }}>
+        <Alert severity="error" sx={{ mb: 3 }}>
           {errors.general}
-        </div>
+        </Alert>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <Box component="form" onSubmit={handleSubmit}>
         {/* Company Name */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-            Şirket Adı *
-          </label>
-          <input
-            type="text"
-            value={formData.companyName}
-            onChange={(e) => handleInputChange('companyName', e.target.value)}
-            disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              border: errors.companyName ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-              borderRadius: '6px', 
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            placeholder="Şirket Adı A.Ş."
-          />
-          {errors.companyName && (
-            <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-              {errors.companyName}
-            </span>
-          )}
-        </div>
+        <TextField
+          fullWidth
+          label="Şirket Adı"
+          variant="outlined"
+          value={formData.companyName}
+          onChange={(e) => handleInputChange('companyName', e.target.value)}
+          error={!!errors.companyName}
+          helperText={errors.companyName}
+          disabled={loading}
+          required
+          sx={{ mb: 2 }}
+        />
 
         {/* Email */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-            Email *
-          </label>
-          <input
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleInputChange('email', e.target.value)}
-            disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              border: errors.email ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-              borderRadius: '6px', 
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            placeholder="info@sirketiniz.com"
-          />
-          {errors.email && (
-            <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-              {errors.email}
-            </span>
-          )}
-        </div>
+        <TextField
+          fullWidth
+          label="Email"
+          type="email"
+          variant="outlined"
+          value={formData.email}
+          onChange={(e) => handleInputChange('email', e.target.value)}
+          error={!!errors.email}
+          helperText={errors.email}
+          disabled={loading}
+          required
+          sx={{ mb: 2 }}
+        />
 
         {/* Password */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-            Şifre *
-          </label>
-          <input
-            type="password"
-            value={formData.password}
-            onChange={(e) => handleInputChange('password', e.target.value)}
-            disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              border: errors.password ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-              borderRadius: '6px', 
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            placeholder="En az 8 karakter, büyük/küçük harf ve rakam"
-          />
-          {errors.password && (
-            <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-              {errors.password}
-            </span>
-          )}
-        </div>
+        <TextField
+          fullWidth
+          label="Şifre"
+          type="password"
+          variant="outlined"
+          value={formData.password}
+          onChange={(e) => handleInputChange('password', e.target.value)}
+          error={!!errors.password}
+          helperText={errors.password || 'En az 8 karakter, büyük/küçük harf ve rakam'}
+          disabled={loading}
+          required
+          sx={{ mb: 2 }}
+        />
 
         {/* Contact Person */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-            İletişim Kişisi *
-          </label>
-          <input
-            type="text"
-            value={formData.contactPerson}
-            onChange={(e) => handleInputChange('contactPerson', e.target.value)}
-            disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              border: errors.contactPerson ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-              borderRadius: '6px', 
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            placeholder="Ahmet Yılmaz"
-          />
-          {errors.contactPerson && (
-            <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-              {errors.contactPerson}
-            </span>
-          )}
-        </div>
+        <TextField
+          fullWidth
+          label="İletişim Kişisi"
+          variant="outlined"
+          value={formData.contactPerson}
+          onChange={(e) => handleInputChange('contactPerson', e.target.value)}
+          error={!!errors.contactPerson}
+          helperText={errors.contactPerson}
+          disabled={loading}
+          required
+          sx={{ mb: 2 }}
+        />
 
         {/* Industry & Company Size */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              Sektör
-            </label>
-            <input
-              type="text"
-              value={formData.industry}
-              onChange={(e) => handleInputChange('industry', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-              placeholder="Teknoloji, Finans, vb."
-            />
-          </div>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            label="Sektör"
+            variant="outlined"
+            value={formData.industry}
+            onChange={(e) => handleInputChange('industry', e.target.value)}
+            disabled={loading}
+            placeholder="Teknoloji, Finans, vb."
+          />
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              Şirket Büyüklüğü
-            </label>
-            <select
-              value={formData.companySize}
-              onChange={(e) => handleInputChange('companySize', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-            >
-              <option value="">Seçiniz</option>
-              {companySizes.map(size => (
-                <option key={size.value} value={size.value}>
-                  {size.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          <TextField
+            fullWidth
+            select
+            label="Şirket Büyüklüğü"
+            value={formData.companySize}
+            onChange={(e) => handleInputChange('companySize', e.target.value)}
+            disabled={loading}
+          >
+            <MenuItem value="">Seçiniz</MenuItem>
+            {companySizes.map(size => (
+              <MenuItem key={size.value} value={size.value}>
+                {size.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Stack>
 
         {/* Website & Location */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              Website
-            </label>
-            <input
-              type="url"
-              value={formData.website}
-              onChange={(e) => handleInputChange('website', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: errors.website ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-              placeholder="https://sirketiniz.com"
-            />
-            {errors.website && (
-              <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-                {errors.website}
-              </span>
-            )}
-          </div>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            label="Website"
+            type="url"
+            variant="outlined"
+            value={formData.website}
+            onChange={(e) => handleInputChange('website', e.target.value)}
+            error={!!errors.website}
+            helperText={errors.website}
+            disabled={loading}
+            placeholder="https://sirketiniz.com"
+          />
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              Şehir
-            </label>
-            <input
-              type="text"
-              value={formData.locationCity}
-              onChange={(e) => handleInputChange('locationCity', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-              placeholder="İstanbul, Ankara, vb."
-            />
-          </div>
-        </div>
+          <TextField
+            fullWidth
+            label="Şehir"
+            variant="outlined"
+            value={formData.locationCity}
+            onChange={(e) => handleInputChange('locationCity', e.target.value)}
+            disabled={loading}
+            placeholder="İstanbul, Ankara, vb."
+          />
+        </Stack>
 
         {/* Contact Phone & Email */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              İletişim Telefonu
-            </label>
-            <input
-              type="tel"
-              value={formData.contactPhone}
-              onChange={(e) => handleInputChange('contactPhone', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: errors.contactPhone ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-              placeholder="+90 555 123 45 67"
-            />
-            {errors.contactPhone && (
-              <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-                {errors.contactPhone}
-              </span>
-            )}
-          </div>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField
+            fullWidth
+            label="İletişim Telefonu"
+            type="tel"
+            variant="outlined"
+            value={formData.contactPhone}
+            onChange={(e) => handleInputChange('contactPhone', e.target.value)}
+            error={!!errors.contactPhone}
+            helperText={errors.contactPhone}
+            disabled={loading}
+            placeholder="+90 555 123 45 67"
+          />
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-              İletişim Email
-            </label>
-            <input
-              type="email"
-              value={formData.contactEmail}
-              onChange={(e) => handleInputChange('contactEmail', e.target.value)}
-              disabled={loading}
-              style={{ 
-                width: '100%', 
-                padding: '10px', 
-                border: errors.contactEmail ? '2px solid #e53e3e' : '1px solid #e2e8f0', 
-                borderRadius: '6px', 
-                fontSize: '14px',
-                outline: 'none'
-              }}
-              placeholder="iletisim@sirketiniz.com"
-            />
-            {errors.contactEmail && (
-              <span style={{ color: '#e53e3e', fontSize: '12px', display: 'block', marginTop: '3px' }}>
-                {errors.contactEmail}
-              </span>
-            )}
-          </div>
-        </div>
+          <TextField
+            fullWidth
+            label="İletişim Email"
+            type="email"
+            variant="outlined"
+            value={formData.contactEmail}
+            onChange={(e) => handleInputChange('contactEmail', e.target.value)}
+            error={!!errors.contactEmail}
+            helperText={errors.contactEmail}
+            disabled={loading}
+            placeholder="iletisim@sirketiniz.com"
+          />
+        </Stack>
 
         {/* Description */}
-        <div style={{ marginBottom: '25px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#4a5568', fontWeight: '500' }}>
-            Şirket Açıklaması
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => handleInputChange('description', e.target.value)}
-            disabled={loading}
-            rows={3}
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              border: '1px solid #e2e8f0', 
-              borderRadius: '6px', 
-              fontSize: '14px',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              outline: 'none'
-            }}
-            placeholder="Şirketiniz hakkında kısa bir açıklama yazın..."
-          />
-        </div>
+        <TextField
+          fullWidth
+          label="Şirket Açıklaması"
+          variant="outlined"
+          multiline
+          rows={3}
+          value={formData.description}
+          onChange={(e) => handleInputChange('description', e.target.value)}
+          disabled={loading}
+          placeholder="Şirketiniz hakkında kısa bir açıklama yazın..."
+          sx={{ mb: 3 }}
+        />
 
         {/* Submit Button */}
-        <button
+        <Button
           type="submit"
+          fullWidth
+          variant="contained"
           disabled={loading}
-          style={{ 
-            width: '100%', 
-            padding: '14px', 
-            backgroundColor: loading ? '#a0aec0' : '#667eea', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '6px', 
-            fontSize: '16px', 
-            fontWeight: 'bold', 
-            cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.2s'
+          sx={{
+            py: 2,
+            fontSize: '16px',
+            fontWeight: 600,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+            }
           }}
         >
-          {loading ? 'Kayıt oluşturuluyor...' : 'Hesap Oluştur'}
-        </button>
-      </form>
+          {loading ? 'Kayıt oluşturuluyor...' : '🏢 Hesap Oluştur'}
+        </Button>
+      </Box>
 
       {/* Login Link */}
-      <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
-        <span style={{ color: '#718096', fontSize: '14px' }}>Zaten hesabınız var mı? </span>
-        <Link 
-          to="/login" 
-          style={{ 
-            color: '#667eea', 
-            textDecoration: 'none', 
-            fontWeight: 'bold' 
-          }}
-        >
-          Giriş Yap
-        </Link>
-      </div>
-    </div>
+      <Box sx={{ textAlign: 'center', mt: 3, pt: 2, borderTop: '1px solid #e5e7eb' }}>
+        <Typography variant="body2" color="text.secondary">
+          Zaten hesabınız var mı?{' '}
+          <Link 
+            to="/login" 
+            style={{ 
+              color: '#667eea', 
+              textDecoration: 'none', 
+              fontWeight: 'bold' 
+            }}
+          >
+            Giriş Yap
+          </Link>
+        </Typography>
+      </Box>
+    </Paper>
   );
 };
 
