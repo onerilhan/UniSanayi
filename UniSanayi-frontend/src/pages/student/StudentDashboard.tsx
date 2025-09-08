@@ -100,7 +100,7 @@ const StudentDashboard: React.FC = () => {
       <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', padding: '20px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           
-          {/* Hoş Geldin Kartı */}
+          {/* Hoş Geldin Kartı - Profil Düzenle Butonu İle */}
           <div style={{ 
             backgroundColor: 'white', 
             padding: '30px', 
@@ -108,23 +108,46 @@ const StudentDashboard: React.FC = () => {
             marginBottom: '20px', 
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)' 
           }}>
-            <h1 style={{ color: '#1a202c', marginBottom: '10px', fontSize: '28px' }}>
-              Hoş Geldin, {student?.firstName} {student?.lastName}! 👨‍🎓
-            </h1>
-            <p style={{ color: '#4a5568', fontSize: '16px', marginBottom: '20px' }}>
-              {student?.university} - {student?.department}
-            </p>
-            <div style={{ 
-              display: 'inline-block',
-              padding: '8px 16px',
-              backgroundColor: student?.isAvailable ? '#d4edda' : '#f8d7da',
-              color: student?.isAvailable ? '#155724' : '#721c24',
-              borderRadius: '6px',
-              border: student?.isAvailable ? '1px solid #c3e6cb' : '1px solid #f5c6cb',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}>
-              {student?.isAvailable ? '✅ Müsait' : '❌ Müsait Değil'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ color: '#1a202c', marginBottom: '10px', fontSize: '28px' }}>
+                  Hoş Geldin, {student?.firstName} {student?.lastName}! 👨‍🎓
+                </h1>
+                <p style={{ color: '#4a5568', fontSize: '16px', marginBottom: '20px' }}>
+                  {student?.university} - {student?.department}
+                </p>
+                <div style={{ 
+                  display: 'inline-block',
+                  padding: '8px 16px',
+                  backgroundColor: student?.isAvailable ? '#d4edda' : '#f8d7da',
+                  color: student?.isAvailable ? '#155724' : '#721c24',
+                  borderRadius: '6px',
+                  border: student?.isAvailable ? '1px solid #c3e6cb' : '1px solid #f5c6cb',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}>
+                  {student?.isAvailable ? '✅ Müsait' : '❌ Müsait Değil'}
+                </div>
+              </div>
+              
+              <button
+                onClick={() => navigate('/student/profile')}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#5a67d8'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#667eea'}
+              >
+                ⚙️ Profili Düzenle
+              </button>
             </div>
           </div>
 
@@ -184,7 +207,7 @@ const StudentDashboard: React.FC = () => {
 
           {activeTab === 'applications' && (
             <>
-              {/* İstatistik Kartları */}
+              {/* İstatistik Kartları - Gerçek Veriler */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
                 <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '12px', textAlign: 'center', border: '2px solid #e5e7eb' }}>
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#667eea', marginBottom: '8px' }}>
@@ -239,7 +262,7 @@ const StudentDashboard: React.FC = () => {
                     <h4 style={{ color: '#374151', marginBottom: '8px' }}>Henüz başvuru yapmamışsınız</h4>
                     <p style={{ marginBottom: '24px' }}>Ana sayfadan projelerimizi inceleyip başvuru yapabilirsiniz.</p>
                     <button 
-                      onClick={() => window.location.href = '/'}
+                      onClick={() => navigate('/')}
                       style={{
                         padding: '12px 24px',
                         backgroundColor: '#667eea',
@@ -309,8 +332,7 @@ const StudentDashboard: React.FC = () => {
                             </div>
                             
                             <button
-                             onClick={() => navigate(`/project/$
-                              {application.projectId}`)}
+                             onClick={() => navigate(`/project/${application.projectId}`)}
                               style={{
                                 padding: '8px 16px',
                                 backgroundColor: '#f1f5f9',
@@ -349,9 +371,23 @@ const StudentDashboard: React.FC = () => {
                 👤 Profil Bilgileri
               </h3>
               <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
-                <h4 style={{ color: '#374151', marginBottom: '8px' }}>Profil düzenleme sayfası yakında!</h4>
-                <p>Bu özellik geliştirme aşamasında.</p>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>👤</div>
+                <h4 style={{ color: '#374151', marginBottom: '16px' }}>Profil bilgilerinizi düzenleyin</h4>
+                <p style={{ marginBottom: '24px' }}>Profil sayfasında tüm bilgilerinizi güncelleyebilirsiniz.</p>
+                <button 
+                  onClick={() => navigate('/student/profile')}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚙️ Profili Düzenle
+                </button>
               </div>
             </div>
           )}

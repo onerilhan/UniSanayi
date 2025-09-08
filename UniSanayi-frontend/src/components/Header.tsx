@@ -8,7 +8,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onSearch }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const { isAuthenticated, user, student, company, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleSearch = () => {
@@ -30,16 +30,6 @@ const Header: React.FC<HeaderProps> = ({ onSearch }) => {
 
   const getDashboardLink = () => {
     return user?.userType === 'Student' ? '/student' : '/company';
-  };
-
-  const getUserDisplayName = () => {
-    if (user?.userType === 'Student' && student) {
-      return `${student.firstName} ${student.lastName}`;
-    }
-    if (user?.userType === 'Company' && company) {
-      return company.companyName;
-    }
-    return user?.email || 'Kullanıcı';
   };
 
   return (
@@ -100,20 +90,6 @@ const Header: React.FC<HeaderProps> = ({ onSearch }) => {
               >
                 Dashboard
               </Link>
-
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '10px', 
-                padding: '8px 16px', 
-                background: 'rgba(255,255,255,0.1)', 
-                borderRadius: '6px',
-                border: '1px solid rgba(255,255,255,0.3)'
-              }}>
-                <span style={{ fontSize: '14px', opacity: 0.9 }}>
-                  {user?.userType === 'Student' ? '👨‍🎓' : '🏢'} {getUserDisplayName()}
-                </span>
-              </div>
 
               <button
                 onClick={handleLogout}
