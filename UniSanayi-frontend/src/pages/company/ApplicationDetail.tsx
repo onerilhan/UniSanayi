@@ -158,7 +158,12 @@ const ApplicationDetail: React.FC = () => {
       <>
         <Header />
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-          <CircularProgress />
+          <Box textAlign="center">
+            <CircularProgress size={60} sx={{ color: '#667eea' }} />
+            <Typography variant="h6" color="text.secondary" sx={{ mt: 2 }}>
+              Başvuru yükleniyor...
+            </Typography>
+          </Box>
         </Box>
       </>
     );
@@ -184,16 +189,30 @@ const ApplicationDetail: React.FC = () => {
         <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 16px' }}>
           
           {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+          <div style={{ marginBottom: '24px' }}>
             <Button
               startIcon={<ArrowBack />}
-              onClick={() => navigate('/company/dashboard')}
-              sx={{ mr: 2 }}
+              onClick={() => navigate('/company')}
+              sx={{ 
+                mb: 2,
+                color: '#667eea',
+                '&:hover': { bgcolor: 'rgba(102, 126, 234, 0.1)' }
+              }}
             >
-              Geri Dön
+              Dashboard'a Dön
             </Button>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-              Başvuru Detayı
+            <Typography 
+              variant="h4" 
+              component="h1" 
+              sx={{ 
+                fontWeight: 600,
+                color: '#1f2937',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}
+            >
+              📄 Başvuru Detayı
             </Typography>
           </div>
 
@@ -215,47 +234,49 @@ const ApplicationDetail: React.FC = () => {
             {/* Sol Taraf - Student Info ve Cover Letter */}
             <div>
               {/* Student Info */}
-              <Paper sx={{ p: 3, mb: 3 }}>
+              <Paper sx={{ p: 3, mb: 3, borderRadius: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <Person sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">Öğrenci Bilgileri</Typography>
+                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    👤 Öğrenci Bilgileri
+                  </Typography>
                 </Box>
                 
                 <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
                   {application.studentName}
                 </Typography>
                 <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                  {application.studentEmail}
+                  📧 {application.studentEmail}
                 </Typography>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                   <div>
-                    <Typography variant="body2" color="text.secondary">Üniversite</Typography>
+                    <Typography variant="body2" color="text.secondary">🎓 Üniversite</Typography>
                     <Typography variant="body1">{application.universityName}</Typography>
                   </div>
                   
                   <div>
-                    <Typography variant="body2" color="text.secondary">Bölüm</Typography>
+                    <Typography variant="body2" color="text.secondary">📚 Bölüm</Typography>
                     <Typography variant="body1">{application.department}</Typography>
                   </div>
                   
                   {application.currentYear && (
                     <div>
-                      <Typography variant="body2" color="text.secondary">Sınıf</Typography>
+                      <Typography variant="body2" color="text.secondary">📖 Sınıf</Typography>
                       <Typography variant="body1">{application.currentYear}. Sınıf</Typography>
                     </div>
                   )}
                   
                   {application.graduationYear && (
                     <div>
-                      <Typography variant="body2" color="text.secondary">Mezuniyet Yılı</Typography>
+                      <Typography variant="body2" color="text.secondary">🎯 Mezuniyet Yılı</Typography>
                       <Typography variant="body1">{application.graduationYear}</Typography>
                     </div>
                   )}
                   
                   {application.gpa && (
                     <div>
-                      <Typography variant="body2" color="text.secondary">GPA</Typography>
+                      <Typography variant="body2" color="text.secondary">📊 GPA</Typography>
                       <Typography variant="body1">{application.gpa}/4.00</Typography>
                     </div>
                   )}
@@ -263,10 +284,12 @@ const ApplicationDetail: React.FC = () => {
               </Paper>
 
               {/* Cover Letter */}
-              <Paper sx={{ p: 3 }}>
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <Assignment sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">Motivasyon Mektubu</Typography>
+                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    📝 Motivasyon Mektubu
+                  </Typography>
                 </Box>
                 <Typography variant="body1" sx={{ lineHeight: 1.6, fontStyle: 'italic' }}>
                   "{application.coverLetter}"
@@ -277,8 +300,10 @@ const ApplicationDetail: React.FC = () => {
             {/* Sağ Taraf - Status, Actions ve Project Info */}
             <div>
               {/* Status ve Actions */}
-              <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Başvuru Durumu</Typography>
+              <Paper sx={{ p: 3, mb: 3, borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🏷️ Başvuru Durumu
+                </Typography>
                 
                 <Chip
                   label={getStatusText(application.applicationStatus)}
@@ -292,7 +317,7 @@ const ApplicationDetail: React.FC = () => {
                 />
 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Başvuru Tarihi
+                  📅 Başvuru Tarihi
                 </Typography>
                 <Typography variant="body1" sx={{ mb: 2 }}>
                   {formatDateTime(application.appliedAt)}
@@ -301,7 +326,7 @@ const ApplicationDetail: React.FC = () => {
                 {application.reviewedAt && (
                   <>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      İnceleme Tarihi
+                      ✅ İnceleme Tarihi
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 3 }}>
                       {formatDateTime(application.reviewedAt)}
@@ -311,7 +336,9 @@ const ApplicationDetail: React.FC = () => {
 
                 <Divider sx={{ my: 2 }} />
 
-                <Typography variant="h6" sx={{ mb: 2 }}>Durum Güncelle</Typography>
+                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  🔄 Durum Güncelle
+                </Typography>
                 
                 <FormControl fullWidth sx={{ mb: 2 }}>
                   <InputLabel>Yeni Durum</InputLabel>
@@ -334,13 +361,15 @@ const ApplicationDetail: React.FC = () => {
                   href={`mailto:${application.studentEmail}`}
                   sx={{ mt: 1 }}
                 >
-                  Email Gönder
+                  📧 Email Gönder
                 </Button>
               </Paper>
 
               {/* Project Info */}
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Proje Bilgileri</Typography>
+              <Paper sx={{ p: 3, borderRadius: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  📋 Proje Bilgileri
+                </Typography>
                 
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                   Proje Adı

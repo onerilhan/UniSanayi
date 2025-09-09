@@ -496,17 +496,20 @@ const CompanyDashboard: React.FC = () => {
                     <h3 style={{ color: '#1a202c', margin: 0 }}>Yeni Proje</h3>
                   </div>
                   <p style={{ color: '#4a5568', marginBottom: '20px' }}>Yeni proje oluşturun ve yetenekli öğrencilerle buluşun.</p>
-                  <button style={{
-                    padding: '12px 24px',
-                    backgroundColor: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    width: '100%',
-                    fontSize: '16px'
-                  }}>
+                  <button 
+                    onClick={() => navigate('/company/projects/new')}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      width: '100%',
+                      fontSize: '16px'
+                    }}
+                  >
                     Proje Oluştur
                   </button>
                 </div>
@@ -1135,7 +1138,7 @@ const CompanyDashboard: React.FC = () => {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <h4 style={{ margin: '0 0 8px 0', color: '#1f2937' }}>Profil Tamamlanma</h4>
+                        <h4 style={{ margin: '0 0 8px 0', color: '#1f2937' }}>📊 Profil Tamamlanma</h4>
                         <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
                           Profilinizi tamamlayarak daha fazla öğrenci ile buluşun
                         </p>
