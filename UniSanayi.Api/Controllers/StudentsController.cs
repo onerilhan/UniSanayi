@@ -94,14 +94,14 @@ namespace UniSanayi.Api.Controllers
             if (request.StudentNumber != null) student.StudentNumber = request.StudentNumber;
             if (request.UniversityName != null) student.UniversityName = request.UniversityName;
             if (request.Department != null) student.Department = request.Department;
-            if (request.CurrentYear.HasValue) student.CurrentYear = request.CurrentYear;
-            if (request.GraduationYear.HasValue) student.GraduationYear = request.GraduationYear;
-            if (request.Gpa.HasValue) student.Gpa = request.Gpa;
-            if (request.Phone != null) student.Phone = request.Phone;
-            if (request.LocationCity != null) student.LocationCity = request.LocationCity;
-            if (request.Bio != null) student.Bio = request.Bio;
-            if (request.LinkedinUrl != null) student.LinkedinUrl = request.LinkedinUrl;
-            if (request.GithubUrl != null) student.GithubUrl = request.GithubUrl;
+            student.CurrentYear = request.CurrentYear;
+            student.GraduationYear = request.GraduationYear;
+            student.Gpa = request.Gpa;
+            student.Phone = request.Phone;
+            student.LocationCity = request.LocationCity;
+            student.Bio = request.Bio;
+            student.LinkedinUrl = request.LinkedinUrl;
+            student.GithubUrl = request.GithubUrl;
             if (request.IsAvailable.HasValue) student.IsAvailable = request.IsAvailable.Value;
 
             await _context.SaveChangesAsync();

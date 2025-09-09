@@ -9,6 +9,9 @@ import StudentDashboard from './pages/student/StudentDashboard';
 import StudentProfileSettings from './pages/student/StudentProfileSettings';
 import CompanyDashboard from './pages/company/CompanyDashboard';
 import ProjectDetail from './pages/ProjectDetail';
+import CompanyProfileEdit from './pages/company/CompanyProfileEdit';
+import CreateProject from './pages/company/CreateProject';
+import ApplicationDetail from './pages/company/ApplicationDetail';
 
 export default function App() {
   return (
@@ -18,6 +21,9 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/project/:id" element={<ProjectDetail />} />
+        <Route path="/company/profile" element={<CompanyProfileEdit />} />
+        <Route path="/company/projects/new" element={<CreateProject />} />
+        <Route path="/company/applications/:id" element={<ApplicationDetail />} />
         
         {/* Protected Routes */}
         <Route path="/student" element={
