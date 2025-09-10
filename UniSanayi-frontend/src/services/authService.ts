@@ -25,6 +25,23 @@ export type CompanyRegisterForm = {
   locationCity: string;
 };
 
+export type GoogleLoginForm = {
+  googleToken: string;
+  userType: string;
+  // Student için
+  firstName?: string;
+  lastName?: string;
+  universityName?: string;
+  department?: string;
+  currentYear?: number;
+  graduationYear?: number;
+  // Company için
+  companyName?: string;
+  contactPerson?: string;
+  industry?: string;
+  companySize?: string;
+};
+
 export const authService = {
   async registerStudent(form: StudentRegisterForm) {
     // /api/Auth/register/student
@@ -62,11 +79,16 @@ export const authService = {
   },
 
   async login(body: { email: string; password: string; captchaToken?: string }) {
-  const { data } = await apiClient.post('/auth/login', {
-    email: body.email,
-    password: body.password,
-    captchaToken: body.captchaToken
-  });
-  return data; 
-},
+    const { data } = await apiClient.post('/auth/login', {
+      email: body.email,
+      password: body.password,
+      captchaToken: body.captchaToken
+    });
+    return data; 
+  },
+
+  async googleLogin(body: GoogleLoginForm) {
+    const { data } = await apiClient.post('/auth/google/login', body);
+    return data;
+  }
 };
