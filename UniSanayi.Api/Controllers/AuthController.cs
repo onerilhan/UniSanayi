@@ -12,6 +12,7 @@ using UniSanayi.Api.DTOs.Auth;
 using UniSanayi.Api.Models;
 using UniSanayi.Api.Validators.Auth;
 using System.Text.Json;
+using Google.Apis.Auth;
 
 namespace UniSanayi.Api.Controllers
 {
@@ -21,11 +22,13 @@ namespace UniSanayi.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, ILogger<AuthController> logger)
         {
             _context = context;
             _configuration = configuration;
+            _logger = logger;
         }
 
         // POST: api/auth/register/student
@@ -203,6 +206,7 @@ namespace UniSanayi.Api.Controllers
                 var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
                 return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
             }
+            
             // reCAPTCHA doğrulama
             if (string.IsNullOrEmpty(request.CaptchaToken))
             {
@@ -296,6 +300,52 @@ namespace UniSanayi.Api.Controllers
             return Ok(ApiResponse<object>.SuccessResponse(response, "Giriş başarılı."));
         }
 
+        // POST: api/auth/google/login
+        [HttpPost("google/login")]
+        public async Task<ActionResult> GoogleLogin(GoogleLoginRequest request)
+        {
+            // Validation
+            var validator = new GoogleLoginRequestValidator();
+            var validationResult = await validator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                return BadRequest(ApiResponse.ErrorResponse("Doğrulama hataları oluştu.", 400, errors));
+            }
+
+            try
+            {
+                // Google token'ı doğrula
+                var googleUserInfo = await VerifyGoogleTokenAsync(request.GoogleToken);
+                if (googleUserInfo == null)
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("Geçersiz Google token.", 400));
+                }
+
+                // Kullanıcı zaten var mı kontrol et
+                var existingUser = await _context.Users
+                    .Include(u => u.Student)
+                    .Include(u => u.Company)
+                    .FirstOrDefaultAsync(u => u.Email == googleUserInfo.Email);
+
+                if (existingUser != null)
+                {
+                    // Mevcut kullanıcı ile giriş yap
+                    return HandleExistingGoogleUser(existingUser, request.UserType);
+                }
+                else
+                {
+                    // Yeni kullanıcı oluştur
+                    return await CreateNewGoogleUser(googleUserInfo, request);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Google login error for token: {Token}", request.GoogleToken);
+                return BadRequest(ApiResponse.ErrorResponse("Google ile giriş işleminde hata oluştu.", 500));
+            }
+        }
+
         // POST: api/auth/change-password
         [HttpPost("change-password")]
         [Authorize]
@@ -340,7 +390,238 @@ namespace UniSanayi.Api.Controllers
             return Ok(ApiResponse.SuccessResponse("Şifre başarıyla güncellendi."));
         }
 
-        // Private: JWT Token oluştur
+        // Private Methods
+
+        // Google token doğrulama
+    private async Task<GoogleTokenInfo?> VerifyGoogleTokenAsync(string idToken)
+        {
+            try
+            {
+                var googleClientId = _configuration["Google:ClientId"];
+                
+                var payload = await GoogleJsonWebSignature.ValidateAsync(idToken, 
+                    new GoogleJsonWebSignature.ValidationSettings()
+                    {
+                        Audience = new[] { googleClientId }
+                    });
+
+                if (payload?.EmailVerified != true)
+                    return null;
+
+                return new GoogleTokenInfo
+                {
+                    Email = payload.Email,
+                    Name = payload.Name,
+                    Given_name = payload.GivenName,
+                    Family_name = payload.FamilyName,
+                    Picture = payload.Picture,
+                    Email_verified = payload.EmailVerified,
+                    Sub = payload.Subject
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Google token validation failed");
+                return null;
+            }
+        }
+
+        // Mevcut Google kullanıcısı ile giriş (Synchronous - async değil)
+        private ActionResult HandleExistingGoogleUser(User existingUser, string requestedUserType)
+        {
+            // Kullanıcı aktif mi?
+            if (!existingUser.IsActive)
+            {
+                return BadRequest(ApiResponse.ErrorResponse("Hesabınız devre dışı bırakıldı.", 400));
+            }
+
+            // Kullanıcı türü uyuşuyor mu?
+            if (existingUser.UserType != requestedUserType)
+            {
+                return BadRequest(ApiResponse.ErrorResponse($"Bu email adresi {existingUser.UserType} hesabı olarak kayıtlı. Lütfen doğru hesap türü ile giriş yapın.", 400));
+            }
+
+            // Token oluştur
+            var token = GenerateJwtToken(existingUser);
+
+            // Response hazırla
+            if (existingUser.UserType == "Student" && existingUser.Student != null)
+            {
+                var responseData = new
+                {
+                    token = token,
+                    user = new
+                    {
+                        id = existingUser.Id,
+                        email = existingUser.Email,
+                        userType = existingUser.UserType,
+                        isActive = existingUser.IsActive,
+                        emailVerified = true // Google ile giriş yapanların emaili doğrulanmış kabul edilir
+                    },
+                    student = new
+                    {
+                        id = existingUser.Student.Id,
+                        firstName = existingUser.Student.FirstName,
+                        lastName = existingUser.Student.LastName,
+                        university = existingUser.Student.UniversityName,
+                        department = existingUser.Student.Department,
+                        isAvailable = existingUser.Student.IsAvailable
+                    }
+                };
+
+                return Ok(ApiResponse<object>.SuccessResponse(responseData, "Google ile giriş başarılı."));
+            }
+            else if (existingUser.UserType == "Company" && existingUser.Company != null)
+            {
+                var responseData = new
+                {
+                    token = token,
+                    user = new
+                    {
+                        id = existingUser.Id,
+                        email = existingUser.Email,
+                        userType = existingUser.UserType,
+                        isActive = existingUser.IsActive,
+                        emailVerified = true
+                    },
+                    company = new
+                    {
+                        id = existingUser.Company.Id,
+                        companyName = existingUser.Company.CompanyName,
+                        industry = existingUser.Company.Industry,
+                        isVerified = existingUser.Company.IsVerified
+                    }
+                };
+
+                return Ok(ApiResponse<object>.SuccessResponse(responseData, "Google ile giriş başarılı."));
+            }
+
+            return BadRequest(ApiResponse.ErrorResponse("Profil bilgileri eksik.", 400));
+        }
+
+        // Yeni Google kullanıcısı oluştur
+        private async Task<ActionResult> CreateNewGoogleUser(GoogleTokenInfo googleUserInfo, GoogleLoginRequest request)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // User oluştur
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Email = googleUserInfo.Email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()), // Random password for Google users
+                    UserType = request.UserType,
+                    IsActive = true,
+                    EmailVerified = true, // Google ile kayıt olanlarda email doğrulanmış kabul edilir
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                };
+
+                _context.Users.Add(user);
+
+                if (request.UserType == "Student")
+                {
+                    // Student profili oluştur
+                    var student = new Student
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = user.Id,
+                        FirstName = request.FirstName ?? googleUserInfo.Given_name,
+                        LastName = request.LastName ?? googleUserInfo.Family_name,
+                        UniversityName = request.UniversityName!,
+                        Department = request.Department!,
+                        CurrentYear = request.CurrentYear,
+                        GraduationYear = request.GraduationYear,
+                        IsAvailable = true,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+
+                    _context.Students.Add(student);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    // Token oluştur
+                    var token = GenerateJwtToken(user);
+
+                    var responseData = new
+                    {
+                        token = token,
+                        user = new
+                        {
+                            id = user.Id,
+                            email = user.Email,
+                            userType = user.UserType
+                        },
+                        student = new
+                        {
+                            id = student.Id,
+                            firstName = student.FirstName,
+                            lastName = student.LastName,
+                            university = student.UniversityName,
+                            department = student.Department
+                        }
+                    };
+
+                    return Ok(ApiResponse<object>.SuccessResponse(responseData, "Google ile öğrenci kaydı başarılı."));
+                }
+                else if (request.UserType == "Company")
+                {
+                    // Company profili oluştur
+                    var company = new Company
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = user.Id,
+                        CompanyName = request.CompanyName!,
+                        Industry = request.Industry,
+                        CompanySize = request.CompanySize,
+                        ContactPerson = request.ContactPerson!,
+                        ContactEmail = googleUserInfo.Email,
+                        IsVerified = false,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+
+                    _context.Companies.Add(company);
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    // Token oluştur
+                    var token = GenerateJwtToken(user);
+
+                    var responseData = new
+                    {
+                        token = token,
+                        user = new
+                        {
+                            id = user.Id,
+                            email = user.Email,
+                            userType = user.UserType
+                        },
+                        company = new
+                        {
+                            id = company.Id,
+                            companyName = company.CompanyName,
+                            industry = company.Industry,
+                            isVerified = company.IsVerified
+                        }
+                    };
+
+                    return Ok(ApiResponse<object>.SuccessResponse(responseData, "Google ile şirket kaydı başarılı."));
+                }
+
+                await transaction.RollbackAsync();
+                return BadRequest(ApiResponse.ErrorResponse("Geçersiz kullanıcı türü.", 400));
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error creating Google user for email: {Email}", googleUserInfo.Email);
+                return BadRequest(ApiResponse.ErrorResponse("Kayıt işleminde hata oluştu.", 500));
+            }
+        }
+
+        // JWT Token oluştur
         private string GenerateJwtToken(User user)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
@@ -366,35 +647,35 @@ namespace UniSanayi.Api.Controllers
             return tokenHandler.WriteToken(token);
         }
 
-        // Private: reCAPTCHA doğrulama
-private async Task<bool> VerifyRecaptchaAsync(string token)
-{
-    if (string.IsNullOrWhiteSpace(token))
-        return false;
+        // reCAPTCHA doğrulama
+        private async Task<bool> VerifyRecaptchaAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return false;
 
-    var secretKey = "6LdkocErAAAAAFm2wzQ0jSU_9nE0mlY4kPhv1cLw"; // Secret Key
-    var url = "https://www.google.com/recaptcha/api/siteverify";
-    
-    using var httpClient = new HttpClient();
-    var parameters = new List<KeyValuePair<string, string>>
-    {
-        new("secret", secretKey),
-        new("response", token)
-    };
-    
-    var content = new FormUrlEncodedContent(parameters);
-    var response = await httpClient.PostAsync(url, content);
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-    
-    try
-    {
-        using var jsonDoc = JsonDocument.Parse(jsonResponse);
-        return jsonDoc.RootElement.GetProperty("success").GetBoolean();
-    }
-    catch
-    {
-        return false;
-    }
-}
+            var secretKey = "6LdkocErAAAAAFm2wzQ0jSU_9nE0mlY4kPhv1cLw"; // Secret Key
+            var url = "https://www.google.com/recaptcha/api/siteverify";
+            
+            using var httpClient = new HttpClient();
+            var parameters = new List<KeyValuePair<string, string>>
+            {
+                new("secret", secretKey),
+                new("response", token)
+            };
+            
+            var content = new FormUrlEncodedContent(parameters);
+            var response = await httpClient.PostAsync(url, content);
+            var jsonResponse = await response.Content.ReadAsStringAsync();
+            
+            try
+            {
+                using var jsonDoc = JsonDocument.Parse(jsonResponse);
+                return jsonDoc.RootElement.GetProperty("success").GetBoolean();
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }

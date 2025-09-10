@@ -14,6 +14,7 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/authService';
+import GoogleAuth from '../../components/GoogleAuth';
 
 interface FormErrors {
   email?: string;
@@ -29,6 +30,7 @@ const Login: React.FC = () => {
   const [captchaValue, setCaptchaValue] = useState<string | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState('');
   
@@ -65,11 +67,11 @@ const Login: React.FC = () => {
   };
 
   const handleCaptchaChange = (value: string | null) => {
-  setCaptchaValue(value);
-  if (value && errors.captcha) {
-    clearFieldError('captcha');
-  }
-};
+    setCaptchaValue(value);
+    if (value && errors.captcha) {
+      clearFieldError('captcha');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +135,31 @@ const Login: React.FC = () => {
     }
   };
 
+  // Google Login Handler
+  const handleGoogleSuccess = async (credential: string) => {
+    try {
+      setGoogleLoading(true);
+      setErrors({});
+      
+      // Backend'e Google credential'ını gönder
+      console.log('Google credential:', credential);
+      
+      // TODO: Backend'de Google login endpoint'i oluşturulduğunda burası güncellenecek
+      setErrors({ general: 'Google login henüz backend\'de yapılandırılmadı. Geleneksel login kullanın.' });
+      
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      setErrors({ general: 'Google login başarısız oldu' });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = (error: string) => {
+    console.error('Google auth error:', error);
+    setErrors({ general: error });
+  };
+
   const handleClickShowPassword = () => {
     setShowPassword(!showPassword);
   };
@@ -150,7 +177,7 @@ const Login: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        bbackgroundColor: '#f8f9fa',
+        backgroundColor: '#f8f9fa',
         p: 2
       }}
     >
@@ -187,7 +214,7 @@ const Login: React.FC = () => {
               mb: 1 
             }}
           >
-            🔐 Giriş Yap
+            Giriş Yap
           </Typography>
           
           <Typography 
@@ -308,8 +335,18 @@ const Login: React.FC = () => {
               }
             }}
           >
-            {loading ? 'Giriş yapılıyor...' : '🚀 Giriş Yap'}
+            {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
           </Button>
+        </Box>
+
+        {/* Google Login - Alt kısım */}
+        <Box sx={{ mt: 3, mb: 3 }}>
+          <GoogleAuth
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            disabled={loading || googleLoading}
+            buttonText={googleLoading ? "Google ile giriş yapılıyor..." : "Google ile Hızlı Giriş"}
+          />
         </Box>
 
         {/* Register Link */}
