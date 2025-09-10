@@ -11,6 +11,7 @@ import CompanyDashboard from './pages/company/CompanyDashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import CompanyProfileEdit from './pages/company/CompanyProfileEdit';
 import CreateProject from './pages/company/CreateProject';
+import ProjectEdit from './pages/company/ProjectEdit';
 import ApplicationDetail from './pages/company/ApplicationDetail';
 
 export default function App() {
@@ -41,6 +42,12 @@ export default function App() {
         <Route path="/company" element={
           <ProtectedRoute userType="Company">
             <CompanyDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/company/projects/:id/edit" element={
+          <ProtectedRoute userType="Company">
+            <ProjectEdit />
           </ProtectedRoute>
         } />
       </Routes>

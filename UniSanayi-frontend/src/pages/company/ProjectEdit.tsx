@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import {
   TextField,
@@ -13,20 +13,33 @@ import {
   FormControl,
   InputLabel,
   InputAdornment,
+  Chip,
+  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Chip,
-  IconButton
+  DialogActions
 } from '@mui/material';
-import { Save, ArrowBack, Add, Delete } from '@mui/icons-material';
+import { Save, ArrowBack, Add, Delete, Edit as EditIcon } from '@mui/icons-material';
 
-interface Skill {
-  id: number;
-  name: string;
-  category: string;
-  isActive: boolean;
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  projectType: string;
+  durationDays: number;
+  budgetAmount?: number;
+  currency?: string;
+  locationCity?: string;
+  locationRequirement?: string;
+  maxApplicants?: number;
+  applicationDeadline?: string;
+  projectStartDate?: string;
+  status: string;
+  viewCount: number;
+  applicationsCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface SkillRequirement {
@@ -35,19 +48,30 @@ interface SkillRequirement {
   skillCategory: string;
   requiredLevel: string;
   isMandatory: boolean;
-  weightPercentage: number;
+  weightPercentage?: number;
 }
 
-const CreateProject: React.FC = () => {
+interface Skill {
+  id: number;
+  name: string;
+  category: string;
+  isActive: boolean;
+}
+
+const ProjectEdit: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
+  const [project, setProject] = useState<Project | null>(null);
+  const [skills, setSkills] = useState<SkillRequirement[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
-  const [selectedSkills, setSelectedSkills] = useState<SkillRequirement[]>([]);
-  const [showSkillModal, setShowSkillModal] = useState(false);
   
+  // Skill Modal State
+  const [showSkillModal, setShowSkillModal] = useState(false);
   const [newSkill, setNewSkill] = useState({
     skillId: 0,
     requiredLevel: '',
@@ -66,13 +90,89 @@ const CreateProject: React.FC = () => {
     locationRequirement: 'Remote',
     maxApplicants: '30',
     applicationDeadline: '',
-    projectStartDate: ''
+    projectStartDate: '',
+    status: 'Draft'
   });
 
-  // Skills'leri yükle
   useEffect(() => {
-    fetchAvailableSkills();
-  }, []);
+    if (id) {
+      fetchProject();
+      fetchProjectSkills();
+      fetchAvailableSkills();
+    }
+  }, [id]);
+
+  const fetchProject = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('unisanayi_token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5126/api/projects/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const projectData = result.data;
+        setProject(projectData);
+        
+        // Form data'yı doldur
+        setFormData({
+          title: projectData.title || '',
+          description: projectData.description || '',
+          projectType: projectData.projectType || '',
+          durationDays: projectData.durationDays?.toString() || '',
+          budgetAmount: projectData.budgetAmount?.toString() || '',
+          currency: projectData.currency || 'TRY',
+          locationCity: projectData.locationCity || '',
+          locationRequirement: projectData.locationRequirement || 'Remote',
+          maxApplicants: projectData.maxApplicants?.toString() || '30',
+          applicationDeadline: projectData.applicationDeadline ? 
+            new Date(projectData.applicationDeadline).toISOString().slice(0, 16) : '',
+          projectStartDate: projectData.projectStartDate ? 
+            new Date(projectData.projectStartDate).toISOString().slice(0, 16) : '',
+          status: projectData.status || 'Draft'
+        });
+      } else if (response.status === 401) {
+        navigate('/login');
+      } else {
+        setErrorMessage('Proje yüklenirken hata oluştu.');
+      }
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      setErrorMessage('Bağlantı hatası oluştu.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProjectSkills = async () => {
+    try {
+      const token = localStorage.getItem('unisanayi_token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5126/api/projects/${id}/skills`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSkills(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching project skills:', error);
+    }
+  };
 
   const fetchAvailableSkills = async () => {
     try {
@@ -101,40 +201,6 @@ const CreateProject: React.FC = () => {
     }));
   };
 
-  const handleAddSkill = () => {
-    if (!newSkill.skillId || !newSkill.requiredLevel) {
-      setErrorMessage('Yetkinlik ve seviye seçimi zorunludur.');
-      return;
-    }
-
-    const skill = availableSkills.find(s => s.id === newSkill.skillId);
-    if (!skill) return;
-
-    // Zaten eklenmiş mi kontrol et
-    if (selectedSkills.some(s => s.skillId === newSkill.skillId)) {
-      setErrorMessage('Bu yetkinlik zaten eklenmiş.');
-      return;
-    }
-
-    const skillRequirement: SkillRequirement = {
-      skillId: newSkill.skillId,
-      skillName: skill.name,
-      skillCategory: skill.category,
-      requiredLevel: newSkill.requiredLevel,
-      isMandatory: newSkill.isMandatory,
-      weightPercentage: newSkill.weightPercentage
-    };
-
-    setSelectedSkills(prev => [...prev, skillRequirement]);
-    setShowSkillModal(false);
-    setNewSkill({ skillId: 0, requiredLevel: '', isMandatory: false, weightPercentage: 100 });
-    setErrorMessage('');
-  };
-
-  const handleRemoveSkill = (skillId: number) => {
-    setSelectedSkills(prev => prev.filter(s => s.skillId !== skillId));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -149,7 +215,7 @@ const CreateProject: React.FC = () => {
         return;
       }
 
-      const projectData = {
+      const updateData = {
         title: formData.title,
         description: formData.description,
         projectType: formData.projectType,
@@ -159,46 +225,24 @@ const CreateProject: React.FC = () => {
         locationCity: formData.locationCity || null,
         locationRequirement: formData.locationRequirement,
         maxApplicants: parseInt(formData.maxApplicants),
-        applicationDeadline: formData.applicationDeadline ? new Date(formData.applicationDeadline).toISOString() : null,
-        projectStartDate: formData.projectStartDate ? new Date(formData.projectStartDate).toISOString() : null
+        applicationDeadline: formData.applicationDeadline ? 
+          new Date(formData.applicationDeadline).toISOString() : null,
+        projectStartDate: formData.projectStartDate ? 
+          new Date(formData.projectStartDate).toISOString() : null,
+        status: formData.status
       };
 
-      // Önce projeyi oluştur
-      const response = await fetch('http://localhost:5126/api/projects', {
-        method: 'POST',
+      const response = await fetch(`http://localhost:5126/api/projects/${id}`, {
+        method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(projectData)
+        body: JSON.stringify(updateData)
       });
 
       if (response.ok) {
-        const result = await response.json();
-        const projectId = result.data.id;
-
-        // Sonra skill'leri ekle
-        if (selectedSkills.length > 0) {
-          const skillPromises = selectedSkills.map(skill => 
-            fetch(`http://localhost:5126/api/projects/${projectId}/skills`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                skillId: skill.skillId,
-                requiredLevel: skill.requiredLevel,
-                isMandatory: skill.isMandatory,
-                weightPercentage: skill.weightPercentage
-              })
-            })
-          );
-
-          await Promise.all(skillPromises);
-        }
-
-        setSuccessMessage('Proje başarıyla oluşturuldu!');
+        setSuccessMessage('Proje başarıyla güncellendi!');
         setTimeout(() => {
           navigate('/company');
         }, 2000);
@@ -206,13 +250,100 @@ const CreateProject: React.FC = () => {
         navigate('/login');
       } else {
         const result = await response.json();
-        setErrorMessage(result.message || 'Proje oluşturulurken hata oluştu.');
+        setErrorMessage(result.message || 'Proje güncellenirken hata oluştu.');
       }
     } catch (error) {
-      console.error('Error creating project:', error);
+      console.error('Error updating project:', error);
       setErrorMessage('Bağlantı hatası oluştu.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddSkill = async () => {
+    try {
+      if (!newSkill.skillId || !newSkill.requiredLevel) {
+        setErrorMessage('Yetkinlik ve seviye seçimi zorunludur.');
+        return;
+      }
+
+      const token = localStorage.getItem('unisanayi_token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5126/api/projects/${id}/skills`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          skillId: newSkill.skillId,
+          requiredLevel: newSkill.requiredLevel,
+          isMandatory: newSkill.isMandatory,
+          weightPercentage: newSkill.weightPercentage
+        })
+      });
+
+      if (response.ok) {
+        setSuccessMessage('Yetkinlik başarıyla eklendi!');
+        setShowSkillModal(false);
+        setNewSkill({ skillId: 0, requiredLevel: '', isMandatory: false, weightPercentage: 100 });
+        fetchProjectSkills();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        const result = await response.json();
+        setErrorMessage(result.message || 'Yetkinlik eklenirken hata oluştu.');
+      }
+    } catch (error) {
+      console.error('Error adding skill:', error);
+      setErrorMessage('Sunucu hatası oluştu.');
+    }
+  };
+
+  const handleDeleteSkill = async (skillId: number) => {
+    if (!confirm('Bu yetkinliği silmek istediğinizden emin misiniz?')) return;
+
+    try {
+      const token = localStorage.getItem('unisanayi_token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5126/api/projects/${id}/skills/${skillId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setSuccessMessage('Yetkinlik başarıyla silindi!');
+        fetchProjectSkills();
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        const result = await response.json();
+        setErrorMessage(result.message || 'Yetkinlik silinirken hata oluştu.');
+      }
+    } catch (error) {
+      console.error('Error deleting skill:', error);
+      setErrorMessage('Sunucu hatası oluştu.');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Active': return '#10b981';
+      case 'Draft': return '#f59e0b';
+      case 'Closed': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'Active': return 'Aktif';
+      case 'Draft': return 'Taslak';
+      case 'Closed': return 'Kapalı';
+      default: return status;
     }
   };
 
@@ -225,11 +356,46 @@ const CreateProject: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+          <Box textAlign="center">
+            <div style={{ 
+              width: '50px', 
+              height: '50px', 
+              border: '4px solid #f3f4f6', 
+              borderTop: '4px solid #667eea', 
+              borderRadius: '50%', 
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 20px'
+            }}></div>
+            <Typography variant="h6" color="text.secondary">
+              Proje yükleniyor...
+            </Typography>
+          </Box>
+        </Box>
+      </>
+    );
+  }
+
+  if (!project) {
+    return (
+      <>
+        <Header />
+        <div style={{ maxWidth: '800px', margin: '0 auto', padding: '16px 16px 24px' }}>
+          <Alert severity="error">Proje bulunamadı.</Alert>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Header />
       <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa', padding: '24px 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 16px' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 16px' }}>
           
           {/* Header */}
           <div style={{ marginBottom: '24px' }}>
@@ -244,22 +410,38 @@ const CreateProject: React.FC = () => {
             >
               Dashboard'a Dön
             </Button>
-            <Typography 
-              variant="h4" 
-              component="h1" 
-              sx={{ 
-                fontWeight: 600,
-                color: '#1f2937',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              ➕ Yeni Proje Oluştur
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-              Yeni proje oluşturun ve yetenekli öğrencilerle buluşun
-            </Typography>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <Typography 
+                  variant="h4" 
+                  component="h1" 
+                  sx={{ 
+                    fontWeight: 600,
+                    color: '#1f2937',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}
+                >
+                  <EditIcon /> Proje Düzenle
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                  Proje bilgilerini güncelleyin ve durumunu değiştirin
+                </Typography>
+              </div>
+              
+              {/* Status Badge */}
+              <Chip
+                label={getStatusText(formData.status)}
+                sx={{
+                  backgroundColor: getStatusColor(formData.status),
+                  color: 'white',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  padding: '8px 16px'
+                }}
+              />
+            </div>
           </div>
 
           {/* Messages */}
@@ -278,25 +460,22 @@ const CreateProject: React.FC = () => {
             
             {/* Sol Taraf - Proje Formu */}
             <Paper sx={{ p: 4, borderRadius: 3 }}>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  mb: 3, 
+                  color: 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}
+              >
+                📋 Proje Bilgileri
+              </Typography>
+              
               <form onSubmit={handleSubmit}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   
-                  {/* Temel Bilgiler */}
-                  <div>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        mb: 2, 
-                        color: 'primary.main',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1
-                      }}
-                    >
-                      📋 Proje Bilgileri
-                    </Typography>
-                  </div>
-
                   <TextField
                     fullWidth
                     label="Proje Başlığı *"
@@ -305,25 +484,21 @@ const CreateProject: React.FC = () => {
                     onChange={handleInputChange}
                     required
                     disabled={saving}
-                    placeholder="React.js Frontend Geliştirici Aranıyor"
-                    helperText="Projenizi en iyi tanımlayan açıklayıcı bir başlık yazın"
                   />
 
                   <TextField
                     fullWidth
                     multiline
-                    rows={6}
+                    rows={4}
                     label="Proje Açıklaması *"
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
                     required
                     disabled={saving}
-                    placeholder="UniSanayi projesi kapsamında öğrenciler ve şirketler arasında köprü kuran platform geliştirilecektir..."
-                    helperText="Projenin detaylarını, kullanılacak teknolojileri ve beklentilerinizi açıklayın"
                   />
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                     <FormControl fullWidth required disabled={saving}>
                       <InputLabel>Proje Türü</InputLabel>
                       <Select
@@ -349,42 +524,32 @@ const CreateProject: React.FC = () => {
                       onChange={handleInputChange}
                       required
                       disabled={saving}
-                      InputProps={{ inputProps: { min: 1, max: 730 } }}
-                      placeholder="30"
-                      helperText="1-730 gün arası"
                     />
-                  </div>
 
-                  {/* Bütçe ve Lokasyon */}
-                  <div>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        mb: 2, 
-                        mt: 2, 
-                        color: 'primary.main',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1
-                      }}
-                    >
-                      💰 Bütçe ve Lokasyon
-                    </Typography>
+                    <FormControl fullWidth required disabled={saving}>
+                      <InputLabel>Proje Durumu</InputLabel>
+                      <Select
+                        value={formData.status}
+                        label="Proje Durumu"
+                        onChange={(e) => handleSelectChange('status', e.target.value)}
+                      >
+                        <MenuItem value="Draft">📝 Taslak</MenuItem>
+                        <MenuItem value="Active">✅ Aktif</MenuItem>
+                        <MenuItem value="Closed">❌ Kapalı</MenuItem>
+                      </Select>
+                    </FormControl>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
                     <TextField
                       fullWidth
-                      label="Bütçe (Opsiyonel)"
+                      label="Bütçe"
                       name="budgetAmount"
                       type="number"
                       value={formData.budgetAmount}
                       onChange={handleInputChange}
                       disabled={saving}
-                      placeholder="5000"
-                      helperText="Proje için ayırdığınız toplam bütçe"
                       InputProps={{
-                        inputProps: { min: 0 },
                         endAdornment: (
                           <InputAdornment position="end">
                             <FormControl variant="standard" sx={{ minWidth: 60 }}>
@@ -403,6 +568,27 @@ const CreateProject: React.FC = () => {
                       }}
                     />
 
+                    <TextField
+                      fullWidth
+                      label="Max. Başvuru"
+                      name="maxApplicants"
+                      type="number"
+                      value={formData.maxApplicants}
+                      onChange={handleInputChange}
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                    <TextField
+                      fullWidth
+                      label="Şehir"
+                      name="locationCity"
+                      value={formData.locationCity}
+                      onChange={handleInputChange}
+                      disabled={saving}
+                    />
+
                     <FormControl fullWidth disabled={saving}>
                       <InputLabel>Çalışma Şekli</InputLabel>
                       <Select
@@ -417,50 +603,7 @@ const CreateProject: React.FC = () => {
                     </FormControl>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                    <TextField
-                      fullWidth
-                      label="Şehir (Opsiyonel)"
-                      name="locationCity"
-                      value={formData.locationCity}
-                      onChange={handleInputChange}
-                      disabled={saving}
-                      placeholder="İstanbul"
-                      helperText="Ofiste çalışma gerekiyorsa şehri belirtin"
-                    />
-
-                    <TextField
-                      fullWidth
-                      label="Maksimum Başvuru Sayısı"
-                      name="maxApplicants"
-                      type="number"
-                      value={formData.maxApplicants}
-                      onChange={handleInputChange}
-                      disabled={saving}
-                      InputProps={{ inputProps: { min: 1, max: 1000 } }}
-                      placeholder="30"
-                      helperText="Kabul edeceğiniz maksimum başvuru sayısı"
-                    />
-                  </div>
-
-                  {/* Tarihler */}
-                  <div>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        mb: 2, 
-                        mt: 2, 
-                        color: 'primary.main',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1
-                      }}
-                    >
-                      📅 Tarihler
-                    </Typography>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     <TextField
                       fullWidth
                       label="Başvuru Son Tarihi"
@@ -470,7 +613,6 @@ const CreateProject: React.FC = () => {
                       onChange={handleInputChange}
                       disabled={saving}
                       InputLabelProps={{ shrink: true }}
-                      helperText="Başvuruların kapanacağı tarih"
                     />
 
                     <TextField
@@ -482,12 +624,10 @@ const CreateProject: React.FC = () => {
                       onChange={handleInputChange}
                       disabled={saving}
                       InputLabelProps={{ shrink: true }}
-                      helperText="Projenin başlayacağı tarih"
                     />
                   </div>
 
-                  {/* Submit Buttons */}
-                  <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+                  <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
                     <Button
                       type="submit"
                       variant="contained"
@@ -502,21 +642,13 @@ const CreateProject: React.FC = () => {
                         }
                       }}
                     >
-                      {saving ? 'Oluşturuluyor...' : '🚀 Proje Oluştur'}
+                      {saving ? 'Kaydediliyor...' : '💾 Kaydet'}
                     </Button>
                     <Button
                       variant="outlined"
                       size="large"
                       onClick={() => navigate('/company')}
                       disabled={saving}
-                      sx={{
-                        color: '#64748b',
-                        borderColor: '#e2e8f0',
-                        '&:hover': {
-                          borderColor: '#cbd5e1',
-                          bgcolor: '#f1f5f9'
-                        }
-                      }}
                     >
                       İptal
                     </Button>
@@ -550,14 +682,11 @@ const CreateProject: React.FC = () => {
                 </Button>
               </div>
 
-              {selectedSkills.length === 0 ? (
+              {skills.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                   <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
                   <Typography variant="body2" sx={{ mb: 2 }}>
                     Henüz yetkinlik eklenmemiş
-                  </Typography>
-                  <Typography variant="caption" sx={{ mb: 3, display: 'block' }}>
-                    Proje için gerekli yetkinlikleri ekleyerek daha uygun başvuru alın
                   </Typography>
                   <Button
                     startIcon={<Add />}
@@ -570,7 +699,7 @@ const CreateProject: React.FC = () => {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {selectedSkills.map((skill) => (
+                  {skills.map((skill) => (
                     <div
                       key={skill.skillId}
                       style={{
@@ -601,13 +730,10 @@ const CreateProject: React.FC = () => {
                                 sx={{ backgroundColor: '#dc2626', color: 'white', fontSize: '10px' }}
                               />
                             )}
-                            <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                              %{skill.weightPercentage}
-                            </span>
                           </div>
                         </div>
                         <IconButton
-                          onClick={() => handleRemoveSkill(skill.skillId)}
+                          onClick={() => handleDeleteSkill(skill.skillId)}
                           size="small"
                           sx={{ color: '#dc2626' }}
                         >
@@ -619,29 +745,20 @@ const CreateProject: React.FC = () => {
                 </div>
               )}
 
-              {/* Info Box */}
-              <Alert severity="info" sx={{ mt: 3, fontSize: '12px' }}>
-                <Typography variant="body2">
-                  <strong>💡 Yetkinlik İpucu:</strong> Proje için gerekli olan teknolojileri ve seviyeleri belirleyerek 
-                  daha uygun başvuru alabilirsiniz. Zorunlu yetkinlikler başvuru değerlendirmesinde öncelikli olarak değerlendirilir.
+              {/* Proje İstatistikleri */}
+              <div style={{ marginTop: '24px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                <Typography variant="body2" sx={{ fontWeight: '600', mb: 1 }}>
+                  📊 Proje İstatistikleri
                 </Typography>
-              </Alert>
+                <div style={{ display: 'grid', gap: '8px', fontSize: '14px', color: '#64748b' }}>
+                  <div>👁️ {project.viewCount} görüntülenme</div>
+                  <div>📝 {project.applicationsCount} başvuru</div>
+                  <div>📅 Oluşturulma: {new Date(project.createdAt).toLocaleDateString('tr-TR')}</div>
+                  <div>🔄 Güncelleme: {new Date(project.updatedAt).toLocaleDateString('tr-TR')}</div>
+                </div>
+              </div>
             </Paper>
           </div>
-
-          {/* Tips Box */}
-          <Alert severity="success" sx={{ mt: 3, bgcolor: '#f0fdf4', border: '1px solid #dcfce7' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-              🎯 Başarılı Proje İlanı İçin İpuçları:
-            </Typography>
-            <ul style={{ margin: 0, paddingLeft: '20px', color: '#166534' }}>
-              <li>Açık ve net bir proje başlığı kullanın</li>
-              <li>Gerekli teknolojileri ve yetenekleri belirtin</li>
-              <li>Proje hedeflerini ve beklentilerinizi açıklayın</li>
-              <li>Öğrenci için sağlayacağınız destek ve mentorluktan bahsedin</li>
-              <li>Gerçekçi bir süre ve bütçe belirleyin</li>
-            </ul>
-          </Alert>
         </div>
       </div>
 
@@ -668,7 +785,7 @@ const CreateProject: React.FC = () => {
               >
                 <MenuItem value={0}>Seçiniz</MenuItem>
                 {availableSkills
-                  .filter(skill => !selectedSkills.some(s => s.skillId === skill.id))
+                  .filter(skill => !skills.some(s => s.skillId === skill.id))
                   .map(skill => (
                     <MenuItem key={skill.id} value={skill.id}>
                       {skill.name} ({skill.category})
@@ -727,8 +844,16 @@ const CreateProject: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Loading Animation CSS */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </>
   );
 };
 
-export default CreateProject;
+export default ProjectEdit;

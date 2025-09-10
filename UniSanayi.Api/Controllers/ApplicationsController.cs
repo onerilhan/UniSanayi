@@ -202,123 +202,156 @@ namespace UniSanayi.Api.Controllers
             return Ok(ApiResponse<List<ProjectApplicationResponse>>.SuccessResponse(applications, "Proje başvuruları başarıyla listelendi."));
         }
 
-        // PUT: api/applications/{id}/status (Company - başvuru durumunu güncelle)
-        [HttpPut("{id}/status")]
-        [Authorize(Roles = "Company")]
-        public async Task<ActionResult> UpdateApplicationStatus(Guid id, UpdateApplicationStatusRequest request)
-        {
-            // Validation
-            var validator = new UpdateApplicationStatusRequestValidator();
-            var validationResult = await validator.ValidateAsync(request);
-            if (!validationResult.IsValid)
-            {
-                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
-                return BadRequest(ApiResponse.ErrorResponse("Durum güncelleme parametreleri geçersiz.", 400, errors));
-            }
 
-            var userId = GetCurrentUserId();
-            var company = await _context.Companies
-                .FirstOrDefaultAsync(c => c.UserId == userId);
-
-            if (company == null)
-                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
-
-            var application = await _context.Applications
-                .Include(a => a.Project)
-                .Include(a => a.Student)
-                .FirstOrDefaultAsync(a => a.Id == id);
-
-            if (application == null)
-                return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
-
-            // Başvuru bu şirketin projesine mi kontrol et
-            if (application.Project!.CompanyId != company.Id)
-                return StatusCode(403, ApiResponse<object>.ErrorResponse("Bu başvuruyu görüntüleme yetkiniz yok.", 403));
-
-            // Business Logic: State transition kontrolü
-            var currentStatus = application.ApplicationStatus;
-            var newStatus = request.Status;
-
-            // Geçersiz state transition'lar
-            if (currentStatus == "Accepted" || currentStatus == "Rejected")
-            {
-                return BadRequest(ApiResponse.ErrorResponse("Kabul edilmiş veya reddedilmiş başvuruların durumu değiştirilemez.", 400));
-            }
-
-            // Pending'den direkt Accepted'e geçiş kontrolü (iş kuralı)
-            if (currentStatus == "Pending" && newStatus == "Accepted")
-            {
-                return BadRequest(ApiResponse.ErrorResponse("Başvuruyu kabul etmeden önce 'Reviewed' durumuna almalısınız.", 400));
-            }
-
-            // Aynı proje için aynı anda birden fazla Accepted başvuru kontrolü
-            if (newStatus == "Accepted")
-            {
-                var existingAcceptedCount = await _context.Applications
-                    .CountAsync(a => a.ProjectId == application.ProjectId && 
-                                     a.ApplicationStatus == "Accepted" && 
-                                     a.Id != id);
-
-                var maxAccepted = application.Project.MaxApplicants ?? 1; // Default 1 kişi kabul
-                
-                if (existingAcceptedCount >= maxAccepted)
+                // PUT: api/applications/{id}/status (Company - başvuru durumunu güncelle)
+                [HttpPut("{id}/status")]
+                [Authorize(Roles = "Company")]
+                public async Task<ActionResult> UpdateApplicationStatus(Guid id, UpdateApplicationStatusRequest request)
                 {
-                    return BadRequest(ApiResponse.ErrorResponse($"Bu proje için maksimum {maxAccepted} başvuru kabul edilebilir.", 400));
+                    // Validation
+                    var validator = new UpdateApplicationStatusRequestValidator();
+                    var validationResult = await validator.ValidateAsync(request);
+                    if (!validationResult.IsValid)
+                    {
+                        var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
+                        return BadRequest(ApiResponse.ErrorResponse("Durum güncelleme parametreleri geçersiz.", 400, errors));
+                    }
+
+                    var userId = GetCurrentUserId();
+                    var company = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.UserId == userId);
+
+                    if (company == null)
+                        return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
+
+                    var application = await _context.Applications
+                        .Include(a => a.Project)
+                        .Include(a => a.Student)
+                        .FirstOrDefaultAsync(a => a.Id == id);
+
+                    if (application == null)
+                        return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
+
+                    // Başvuru bu şirketin projesine mi kontrol et
+                    if (application.Project!.CompanyId != company.Id)
+                        return StatusCode(403, ApiResponse<object>.ErrorResponse("Bu başvuruyu görüntüleme yetkiniz yok.", 403));
+
+                    // BUSINESS LOGIC
+                    var currentStatus = application.ApplicationStatus;
+                    var newStatus = request.Status;
+
+                    // 1. Final state'lerden değişiklik yapılamaz
+                    if (currentStatus == "Accepted" || currentStatus == "Rejected")
+                    {
+                        return BadRequest(ApiResponse.ErrorResponse("Kabul edilmiş veya reddedilmiş başvuruların durumu tekrar değiştirilemez.", 400));
+                    }
+
+                    if (currentStatus == "Pending" && newStatus == "Accepted")
+                    {
+                        return BadRequest(ApiResponse.ErrorResponse("Başvuruyu kabul etmeden önce 'Reviewed' (İncelendi) durumuna almalısınız.", 400));
+                    }
+
+                    if (currentStatus == "Pending" && newStatus == "Rejected")
+                    {
+                        return BadRequest(ApiResponse.ErrorResponse("Başvuruyu reddetmeden önce 'Reviewed' (İncelendi) durumuna almalısınız.", 400));
+                    }
+
+                    var validTransitions = new Dictionary<string, List<string>>
+                    {
+                        { "Pending", new List<string> { "Reviewed" } },
+                        { "Reviewed", new List<string> { "Accepted", "Rejected", "Pending" } }
+                    };
+
+                    if (string.IsNullOrEmpty(currentStatus) || 
+                        string.IsNullOrEmpty(newStatus) ||
+                        !validTransitions.ContainsKey(currentStatus) || 
+                        !validTransitions[currentStatus].Contains(newStatus))
+                    {
+                        return BadRequest(ApiResponse.ErrorResponse("Geçersiz durum bilgisi.", 400));
+                    }
+
+                    // 5. Aynı proje için aynı anda birden fazla Accepted başvuru kontrolü
+                    if (newStatus == "Accepted")
+                    {
+                        var existingAcceptedCount = await _context.Applications
+                            .CountAsync(a => a.ProjectId == application.ProjectId && 
+                                            a.ApplicationStatus == "Accepted" && 
+                                            a.Id != id);
+
+                        var maxAccepted = application.Project.MaxApplicants ?? 1;
+                        
+                        if (existingAcceptedCount >= maxAccepted)
+                        {
+                            return BadRequest(ApiResponse.ErrorResponse($"Bu proje için maksimum {maxAccepted} başvuru kabul edilebilir.", 400));
+                        }
+                    }
+
+                    // Güncelleme yap
+                    application.ApplicationStatus = request.Status;
+                    application.ReviewedAt = DateTimeOffset.UtcNow;
+
+                    await _context.SaveChangesAsync();
+
+                    var responseData = new { 
+                        applicationId = application.Id,
+                        studentName = $"{application.Student!.FirstName} {application.Student.LastName}",
+                        newStatus = request.Status
+                    };
+
+                    return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru durumu başarıyla güncellendi."));
                 }
-            }
 
-            application.ApplicationStatus = request.Status;
-            application.ReviewedAt = DateTimeOffset.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            var responseData = new { 
-                applicationId = application.Id,
-                studentName = $"{application.Student!.FirstName} {application.Student.LastName}",
-                newStatus = request.Status
-            };
-
-            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru durumu başarıyla güncellendi."));
-        }
-
-        // DELETE: api/applications/{id} (Student - başvuruyu iptal et)
-        [HttpDelete("{id}")]
-        [Authorize(Roles = "Student")]
-        public async Task<ActionResult> CancelApplication(Guid id)
-        {
-            var userId = GetCurrentUserId();
-            var student = await _context.Students
-                .FirstOrDefaultAsync(s => s.UserId == userId);
-
-            if (student == null)
-                return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
-
-            var application = await _context.Applications
-                .Include(a => a.Project)
-                .FirstOrDefaultAsync(a => a.Id == id && a.StudentId == student.Id);
-
-            if (application == null)
-                return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
-
-            // Sadece Pending durumundaki başvurular iptal edilebilir
-            if (application.ApplicationStatus != "Pending")
-                return BadRequest(ApiResponse.ErrorResponse("Bu başvuru artık iptal edilemez.", 400));
-
-            // Başvuru tarihi 24 saat geçmişse iptal edilemez (iş kuralı)
-            if (application.AppliedAt < DateTimeOffset.UtcNow.AddHours(-24))
+            // Helper method - Status display name
+            private string GetStatusDisplayName(string status)
             {
-                return BadRequest(ApiResponse.ErrorResponse("24 saat geçen başvurular iptal edilemez.", 400));
+                return status switch
+                {
+                    "Pending" => "Bekliyor",
+                    "Reviewed" => "İncelendi", 
+                    "Accepted" => "Kabul Edildi",
+                    "Rejected" => "Reddedildi",
+                    _ => status
+                };
             }
 
-            _context.Applications.Remove(application);
-            await _context.SaveChangesAsync();
+            // DELETE: api/applications/{id} (Student - başvuruyu iptal et)
+            [HttpDelete("{id}")]
+            [Authorize(Roles = "Student")]
+            public async Task<ActionResult> CancelApplication(Guid id)
+            {
+                var userId = GetCurrentUserId();
+                var student = await _context.Students
+                    .FirstOrDefaultAsync(s => s.UserId == userId);
 
-            var responseData = new { 
-                projectTitle = application.Project!.Title 
-            };
+                if (student == null)
+                    return NotFound(ApiResponse.ErrorResponse("Student profili bulunamadı.", 404));
 
-            return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru başarıyla iptal edildi."));
-        }
+                var application = await _context.Applications
+                    .Include(a => a.Project)
+                    .FirstOrDefaultAsync(a => a.Id == id && a.StudentId == student.Id);
+
+                if (application == null)
+                    return NotFound(ApiResponse.ErrorResponse("Başvuru bulunamadı.", 404));
+
+                // Sadece Pending durumundaki başvurular iptal edilebilir
+                if (application.ApplicationStatus != "Pending")
+                    return BadRequest(ApiResponse.ErrorResponse("Bu başvuru artık iptal edilemez.", 400));
+
+                // Başvuru tarihi 24 saat geçmişse iptal edilemez (iş kuralı)
+                if (application.AppliedAt < DateTimeOffset.UtcNow.AddHours(-24))
+                {
+                    return BadRequest(ApiResponse.ErrorResponse("24 saat geçen başvurular iptal edilemez.", 400));
+                }
+
+                _context.Applications.Remove(application);
+                await _context.SaveChangesAsync();
+
+                var responseData = new { 
+                    projectTitle = application.Project!.Title 
+                };
+
+                return Ok(ApiResponse<object>.SuccessResponse(responseData, "Başvuru başarıyla iptal edildi."));
+            }
 
         // GET: api/applications/{id} (Both - başvuru detayı)
         [HttpGet("{id}")]

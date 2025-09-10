@@ -143,6 +143,17 @@ const ApplicationDetail: React.FC = () => {
     }
   };
 
+  
+  const getApplicationStatusText = (status: string) => {
+    switch (status) {
+      case 'Pending': return 'Bekliyor';
+      case 'Reviewed': return 'İncelendi';
+      case 'Accepted': return 'Kabul Edildi';
+      case 'Rejected': return 'Reddedildi';
+      default: return status;
+    }
+  };
+
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR', {
       year: 'numeric',
@@ -339,13 +350,13 @@ const ApplicationDetail: React.FC = () => {
                 <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                   🔄 Durum Güncelle
                 </Typography>
-                
+
                 <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>Yeni Durum</InputLabel>
+                  <InputLabel>{getApplicationStatusText(application.applicationStatus)}</InputLabel>
                   <Select
                     value=""
-                    label="Yeni Durum"
-                    onChange={(e) => updateApplicationStatus(e.target.value)}
+                    label={getApplicationStatusText(application.applicationStatus)}
+                    onChange={(e) => updateApplicationStatus(e.target.value as string)}
                     disabled={updating}
                   >
                     <MenuItem value="Reviewed">İncelendi</MenuItem>
@@ -353,6 +364,7 @@ const ApplicationDetail: React.FC = () => {
                     <MenuItem value="Rejected">Reddet</MenuItem>
                   </Select>
                 </FormControl>
+
 
                 <Button
                   fullWidth

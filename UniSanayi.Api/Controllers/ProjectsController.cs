@@ -224,7 +224,7 @@ namespace UniSanayi.Api.Controllers
             await _context.SaveChangesAsync();
 
             var responseData = new { projectId = project.Id };
-            return Created($"/api/projects/{project.Id}", 
+            return Created($"/api/projects/{project.Id}",
                 ApiResponse<object>.SuccessResponse(responseData, "Proje başarıyla oluşturuldu."));
         }
 
@@ -379,6 +379,41 @@ namespace UniSanayi.Api.Controllers
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return Guid.Parse(userIdClaim!);
+        }
+        
+        // GET: api/projects/{id}/skills (Company - proje skill requirements)
+        [HttpGet("{id}/skills")]
+        [Authorize(Roles = "Company")]
+        public async Task<ActionResult<List<ProjectSkillRequirementResponse>>> GetProjectSkills(Guid id)
+        {
+            var userId = GetCurrentUserId();
+            var company = await _context.Companies
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+
+            if (company == null)
+                return NotFound(ApiResponse.ErrorResponse("Company profili bulunamadı.", 404));
+
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == id && p.CompanyId == company.Id);
+
+            if (project == null)
+                return NotFound(ApiResponse.ErrorResponse("Proje bulunamadı veya yetkiniz yok.", 404));
+
+            var skillRequirements = await _context.ProjectSkillRequirements
+                .Include(psr => psr.Skill)
+                .Where(psr => psr.ProjectId == id)
+                .Select(psr => new ProjectSkillRequirementResponse
+                {
+                    SkillId = psr.SkillId,
+                    SkillName = psr.Skill!.Name,
+                    SkillCategory = psr.Skill.Category,
+                    RequiredLevel = psr.RequiredLevel,
+                    IsMandatory = psr.IsMandatory,
+                    WeightPercentage = psr.WeightPercentage
+                })
+                .ToListAsync();
+
+            return Ok(ApiResponse<List<ProjectSkillRequirementResponse>>.SuccessResponse(skillRequirements, "Proje yetkinlikleri başarıyla getirildi."));
         }
     }
 }
